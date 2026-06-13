@@ -13,7 +13,7 @@ app.use(express.json());
 app.use(cors());
 
 app.get('/', (req, res) => {
-  res.send({ status: true, message: 'Well Come To Navyboy Server' });
+  res.send({ status: true, message: 'Well Come To shaturajones-backend Server' });
 });
 //username:navyboy
 //password:5aNjnODj1ecD2sSx

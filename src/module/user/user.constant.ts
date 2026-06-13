@@ -1,7 +1,7 @@
 //'admin' | 'user' | 'faculty'
 export const USER_ROLE = {
-    user: 'user',
-    driver: 'driver',
+    customer: 'customer',
+    cleaner: 'cleaner',
     admin: 'admin',
     superAdmin:'superAdmin'
   } as const;

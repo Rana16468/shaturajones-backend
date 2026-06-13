@@ -11,9 +11,7 @@ class QueryBuilder<T> {
 
   search(searchableFields: string[]) {
     const searchTerm = this?.query?.searchTerm;
-
     if (searchTerm) {
-      // Apply $regex only to fields that are strings
       const stringFields = searchableFields.filter((field) => {
         // Check if the field type in your schema is `String`
         const schemaPath = this.modelQuery.model.schema.path(field);

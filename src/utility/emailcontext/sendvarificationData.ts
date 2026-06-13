@@ -1,82 +1,70 @@
-const emailcontext = {
-    sendvarificationData: (username: string, otp: number, subject:string) => {
-      return `
-            <!DOCTYPE html>
-            <html>
-            <head>
-              <meta charset="UTF-8">
-              <meta name="viewport" content="width=device-width, initial-scale=1.0">
-              <title>${subject}</title>
-              <style>
-                body {
-                  font-family: Arial, sans-serif;
-                  line-height: 1.6;
-                  color: #333333;
-                  max-width: 600px;
-                  margin: 0 auto;
-                }
-                .container {
-                  padding: 20px;
-                  border-radius: 5px;
-                  background-color: #f9f9f9;
-                  border: 1px solid #dddddd;
-                }
-                .header {
-                  text-align: center;
-                  padding: 10px;
-                  background-color: #4CAF50;
-                  color: white;
-                  border-radius: 5px 5px 0 0;
-                }
-                .content {
-                  padding: 20px;
-                  background-color: white;
-                  border-radius: 0 0 5px 5px;
-                }
-                .otp-code {
-                  font-size: 24px;
-                  font-weight: bold;
-                  text-align: center;
-                  letter-spacing: 5px;
-                  padding: 10px;
-                  margin: 20px 0;
-                  background-color: #f0f0f0;
-                  border-radius: 4px;
-                }
-                .footer {
-                  font-size: 12px;
-                  text-align: center;
-                  margin-top: 20px;
-                  color: #666666;
-                }
-              </style>
-            </head>
-            <body>
-              <div class="container">
-                <div class="header">
-                  <h2>Email Verification</h2>
-                </div>
-                <div class="content">
-                  <p>Hello ${username || 'User'},</p>
-                  <p>Thank you for registering with our service. To complete your registration, please use the verification code below:</p>
-                  
-                  <div class="otp-code">${otp}</div>
-                  
-                  <p>This code will expire in 10 minutes for security reasons.</p>
-                  <p>If you did not request this code, please ignore this email.</p>
-                  <p>Best regards,<br>The Support Team</p>
-                </div>
-                <div class="footer">
-                  <p>This is an automated message, please do not reply to this email.</p>
-                  <p>&copy; ${new Date().getFullYear()} Your Company Name. All rights reserved.</p>
-                </div>
-              </div>
-            </body>
-            </html>
-            `;
-    },
-  };
+export interface EmailConfigType {
+  companyName: string;
+}
 
-  
-  
-  export default emailcontext;
+export interface EmailContextType {
+  sendVerificationData: (
+    username: string,
+    otp: string,
+    subject: string
+  ) => string;
+}
+
+/**
+ * EmailTemplateManager - Generates Plain Text OTP Emails for the Team
+ */
+export class EmailTemplateManager implements EmailContextType {
+  private companyName: string;
+
+  constructor(config: EmailConfigType) {
+    this.companyName = config.companyName;
+  }
+
+  /**
+   * কোনো HTML ছাড়া একদম সাধারণ (Plain Text) উপায়ে ওটিপি ইমেইল জেনারেট করার মেثড
+   */
+  public sendVerificationData(
+    username: string,
+    otp: string,
+    subject: string
+  ): string {
+    
+    // =====================
+    // ভ্যালিডেশন (Validation)
+    // =====================
+    if (!username || typeof username !== 'string') {
+      throw new Error('[EmailTemplateManager]: Username must be a non-empty string');
+    }
+
+    if (!otp || typeof otp !== 'string' || !/^\d{6}$/.test(otp)) {
+      throw new Error('[EmailTemplateManager]: OTP must be a 6-digit numeric string');
+    }
+
+    if (!subject || typeof subject !== 'string') {
+      throw new Error('[EmailTemplateManager]: Subject must be a non-empty string');
+    }
+
+    const currentYear = new Date().getFullYear();
+
+    // প্লেইন টেক্সট ইমেইলে HTML বা CSS এর কোনো প্রয়োজন নেই।
+    // এখানে '\n' ব্যবহার করা হয়েছে নতুন লাইনে (Line break) যাওয়ার জন্য।
+    return `Hello ${username},
+
+Thank you for choosing our service. Please use the following 6-digit verification code to verify your account:
+
+Verification Code: ${otp}
+
+Important: This security code is valid for 10 minutes. Please do not share this code with anyone.
+If you did not request this verification, you can safely ignore this email.
+
+Best regards,
+The Support Team
+${this.companyName}
+
+--------------------------------------------------
+This is an automated security email. Please do not reply directly to this message.
+© ${currentYear} ${this.companyName}. All rights reserved.`;
+  }
+}
+
+export default EmailTemplateManager;

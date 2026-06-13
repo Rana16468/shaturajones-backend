@@ -1,130 +1,121 @@
-import { z } from 'zod';
+import { object, z } from 'zod';
 import { USER_ACCESSIBILITY, USER_ROLE } from './user.constant';
 
 const createUserZodSchema = z.object({
-  body: z.object({
-    name: z.string({ required_error: 'User name is Required' }).optional(),
 
-    password: z.string({ required_error: 'Password is Required' }).optional(),
+
+  body: z.object({
+    role: z.enum(
+      Object.values(USER_ROLE) as [string, ...string[]],
+      {
+        required_error: 'Role is required',
+        invalid_type_error: 'Invalid role',
+      },
+    ),
+
+    name: z
+      .string({ required_error: 'Name is required' })
+      .min(2, 'Name must be at least 2 characters'),
 
     email: z
-      .string({ required_error: 'Email is Required' })
-      .email('Invalid email format')
-      .refine(
-        (email) => {
-          return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
-        },
-        {
-          message: 'Invalid email format',
-        },
-      )
-      .optional(),
+      .string({ required_error: 'Email is required' })
+      .email('Invalid email format'),
 
-    phoneNumber: z
-      .string({ required_error: 'Phone number is required' })
-      .refine(
-        (phone) => {
-          return (
-            /^(\+?\d{1,3})?[-.\s]?\(?\d{1,4}\)?[-.\s]?\d{1,10}$/.test(phone) &&
-            phone.replace(/[^0-9]/g, '').length >= 7
-          );
-        },
-        {
-          message:
-            'Invalid phone number format. Please include country code for international numbers',
-        },
-      )
-      .optional(),
+    password: z
+      .string({ required_error: 'Password is required' })
+      .min(6, 'Password must be at least 6 characters'),
 
-    role: z
-      .enum(Object.values(USER_ROLE) as [string, ...string[]], {
-        required_error: 'Role is Required',
-        invalid_type_error: 'Invalid role value',
-      })
-      .default(USER_ROLE.user),
-
-    status: z
-      .enum(Object.values(USER_ACCESSIBILITY) as [string, ...string[]], {
-        required_error: 'Status is Required',
-        invalid_type_error: 'Invalid status value',
-      })
-      .default(USER_ACCESSIBILITY.isProgress),
-
-    photo: z.string({ required_error: 'photo is not required' }).optional(),
-    address: z.string({required_error:"address is not required"}).optional(),
-    fcm: z.string({ required_error: 'fcm is not required' }).optional(),
+    location: z
+      .string({ required_error: 'Location is required' })
+      .min(2, 'Location must be at least 2 characters'),
   }),
 });
+
 
 const UserVerification = z.object({
   body: z.object({
     verificationCode: z
-      .number({ required_error: 'varification code is required' })
-      .min(6, { message: 'min 6 character accepted' }),
+      .number({ required_error: 'Verification code is required' })
+      .min(100000, 'Verification code must be 6 digits')
+      .max(999999, 'Verification code must be 6 digits'),
   }),
 });
 
-const ChnagePasswordSchema = z.object({
+const ChangePasswordSchema = z.object({
   body: z.object({
-    newpassword: z
-      .string({ required_error: 'new password is required' })
-      .min(6, { message: 'min 6 character accepted' }),
     oldpassword: z
-      .string({ required_error: 'old password is  required' })
-      .min(6, { message: 'min 6 character accepted' }),
+      .string({ required_error: 'Old password is required' })
+      .min(6, 'Minimum 6 characters required'),
+
+    newpassword: z
+      .string({ required_error: 'New password is required' })
+      .min(6, 'Minimum 6 characters required'),
   }),
 });
+
 
 const UpdateUserProfileSchema = z.object({
   body: z.object({
-    username: z
-      .string({ required_error: 'user name is required' })
-      .min(3, { message: 'min 3 character accepted' })
-      .max(15, { message: 'max 15 character accepted' })
-      .optional(),
-    photo: z.string({ required_error: 'optional photot' }).url().optional(),
+    name: z.string().min(2).max(50).optional(),
+    photo: z.string().url('Invalid photo URL').optional(),
+    location: z.string().optional(),
+    phoneNumber: z.string().optional(),
+    dateOfBirth: z.string().optional(),
+    country: z.string().optional()
+
   }),
 });
+
+const buildCleanerProfile=z.object({
+  body: z.object({
+     photo: z.string({required_error:"photo is required"}),
+     nationalId: z.string({required_error:"nationalId is  required"}),
+     cleaningExperience: z.string({required_error:"cleaningExperience is  required"}),
+     skills: z.array(z.string({required_error:"skills is required"})),
+
+
+  })
+})
+
 
 const ForgotPasswordSchema = z.object({
   body: z.object({
     email: z
-      .string({ required_error: 'Email is Required' })
-      .email('Invalid email format')
-      .refine(
-        (email) => {
-          return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
-        },
-        {
-          message: 'Invalid email format',
-        },
-      ),
+      .string({ required_error: 'Email is required' })
+      .email('Invalid email format'),
   }),
 });
 
+/* ---------------- VERIFY CODE (RESET FLOW) ---------------- */
 const verificationCodeSchema = z.object({
   body: z.object({
     verificationCode: z
-      .number({ required_error: ' verificationCode is require' })
-      .min(4, { message: 'min 4  number accepted' }),
+      .number({ required_error: 'Verification code is required' })
+      .min(1000, 'Minimum 4 digit code required'),
   }),
 });
 
+/* ---------------- RESET PASSWORD ---------------- */
 const resetPasswordSchema = z.object({
   body: z.object({
-    userId: z.string({ required_error: 'userId is require' }),
-    password: z.string({ required_error: 'password is require' }),
+    userId: z.string({ required_error: 'User ID is required' }),
+
+    password: z
+      .string({ required_error: 'Password is required' })
+      .min(6, 'Minimum 6 characters required'),
   }),
 });
 
+/* ---------------- EXPORT ---------------- */
 const UserValidationSchema = {
   createUserZodSchema,
   UserVerification,
-  ChnagePasswordSchema,
+  ChangePasswordSchema,
   UpdateUserProfileSchema,
   ForgotPasswordSchema,
   verificationCodeSchema,
   resetPasswordSchema,
+  buildCleanerProfile
 };
 
 export default UserValidationSchema;

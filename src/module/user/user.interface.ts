@@ -10,19 +10,26 @@ export interface UserResponse {
 
 export type TUser = {
   id: string;
-  role: 'user' | 'admin' | 'superAdmin';
+  role: 'cleaner' | 'customer' | 'admin' | 'superAdmin';
   name: string;
   password: string;
   email: string;
-  phoneNumber?: string;
-  verificationCode: number;
+  location?: string;
+  verificationCode: string;
   isVerify: boolean;
   status: 'isProgress' | 'Blocked';
   photo?: string;
+  nationalId?: string;
+  isValidate?: boolean;
+  cleaningExperience?: string;
+  skills?: string[]
+  dateOfBirth?: string;
+  country?: string;
+  phoneNumber?: string;
+  isOnline?: boolean;
   stripeAccountId?: string;
   isStripeConnected?: boolean;
   fcm?:string;
-  address?:string;
   isDelete: boolean;
 };
 
