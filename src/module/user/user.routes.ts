@@ -130,39 +130,67 @@ router.patch(
   UserController.updateCareerOverview
 );
 
-router.patch('/build_cleaner_profile', 
-  auth(USER_ROLE.cleaner,USER_ROLE.customer),
-  validationRequest(UserValidationSchema.buildCleanerProfile), 
+router.patch(
+  "/build_cleaner_profile",
+  auth(USER_ROLE.cleaner, USER_ROLE.customer),
 
-   (req: Request, _res: Response, next: NextFunction) => {
+  upload.fields([
+    { name: "photo", maxCount: 1 },
+    { name: "nationalId", maxCount: 1 },
+  ]),
+
+  validationRequest(UserValidationSchema.buildCleanerProfile),
+
+  (req: Request, _res: Response, next: NextFunction) => {
     try {
       const files = (req.files || {}) as Record<string, Express.Multer.File[]>;
-
-     
-
-    
 
       const attachPath = (file: Express.Multer.File) =>
         file.path.replace(/\\/g, "/");
 
-      // Single files
+      // ensure object exists
+      if (!req.body.verifyIdentity) {
+        req.body.verifyIdentity = {};
+      }
+
+      // photo
       if (files.photo?.[0]) {
         req.body.photo = attachPath(files.photo[0]);
       }
 
+      // nationalId (keep consistent structure)
       if (files.nationalId?.[0]) {
         req.body.verifyIdentity.nationalId = attachPath(
           files.nationalId[0]
         );
       }
 
+      if (req.body.data) {
+        try {
+          const parsed =
+            typeof req.body.data === "string"
+              ? JSON.parse(req.body.data)
+              : req.body.data;
+
+          req.body = {
+            ...parsed,
+            ...req.body,
+          };
+        } catch (err) {
+          return next(new Error("Invalid JSON in data field"));
+        }
+      }
+
+     
+
       next();
     } catch (error) {
       next(error);
     }
   },
-  
-  UserController.buildCleanerProfile)
+
+  UserController.buildCleanerProfile
+);
 
 
 

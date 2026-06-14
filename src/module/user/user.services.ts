@@ -161,9 +161,6 @@ const changePasswordIntoDb = async (
       throw new ApiError(httpStatus.NOT_FOUND, 'User not found', "");
     }
  
-
-
-   
     const isOldPasswordValid = await users.isPasswordMatched(
       payload.oldPassword,
       user.password,
@@ -175,8 +172,6 @@ const changePasswordIntoDb = async (
         'Old password does not match', ""
       );
     }
-
-
     const isSamePassword = await bcrypt.compare(
       payload.newPassword,
       user.password,
@@ -189,9 +184,7 @@ const changePasswordIntoDb = async (
       );
     }
 
-    
-
-    console.log("new password", payload.newPassword);
+  
 
 
 
@@ -217,7 +210,6 @@ const changePasswordIntoDb = async (
       );
     }
 
-    console.log("updated", updated);
 
 
 
@@ -798,26 +790,35 @@ const updateCareerOverviewIntoDb = async (
   }
 };
 
-const buildCleanerProfileIntoDb = async (
-  userId: string,
-  payload: any
-) => {
+const buildCleanerProfileIntoDb = async (userId: string, payload: any) => {
   try {
     if (!userId) {
       throw new ApiError(httpStatus.BAD_REQUEST, "Invalid user ID", "");
     }
+
     const existing = await users.findById(userId).lean();
 
     if (!existing) {
       throw new ApiError(httpStatus.NOT_FOUND, "User not found", "");
     }
 
+    console.log(payload)
+
     const updateData: any = {};
 
     updateData.photo = payload.photo;
-    updateData.nationalId = payload.nationalId.trim();
-    updateData.cleaningExperience = payload.cleaningExperience.trim();
-    updateData.skills = payload.skills.map((s: string) => s.trim());
+
+   
+    
+      updateData.nationalId=payload.verifyIdentity.nationalId
+    
+
+
+    updateData.cleaningExperience =
+      payload.cleaningExperience?.trim();
+
+    updateData.skills =
+      payload.skills?.map((s: string) => s.trim()) || [];
 
     const result = await users.findByIdAndUpdate(
       userId,
@@ -845,7 +846,6 @@ const buildCleanerProfileIntoDb = async (
     throw catchError(error);
   }
 };
-
 
 
 

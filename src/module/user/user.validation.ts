@@ -66,10 +66,10 @@ const UpdateUserProfileSchema = z.object({
 
 const buildCleanerProfile=z.object({
   body: z.object({
-     photo: z.string({required_error:"photo is required"}),
-     nationalId: z.string({required_error:"nationalId is  required"}),
-     cleaningExperience: z.string({required_error:"cleaningExperience is  required"}),
-     skills: z.array(z.string({required_error:"skills is required"})),
+     photo: z.string({required_error:"photo is required"}).optional(),
+     nationalId: z.string({required_error:"nationalId is  required"}).optional(),
+     cleaningExperience: z.string({required_error:"cleaningExperience is  required"}).optional(),
+     skills: z.array(z.string({required_error:"skills is required"})).optional(),
 
 
   })
