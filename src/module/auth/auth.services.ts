@@ -168,7 +168,7 @@ const myProfileIntoDb = async (id: string) => {
   try {
     const profile = await users
       .findById(id)
-      .select("name companyName  email photo role status dateOfBirth countryOrigin maritalStatus  religiousPractice isVerify  countryOrigin professionalProfile.primaryLanguage photo professionalProfile.currentJobTitle createdAt ");
+      .select("name country dateOfBirth phoneNumber createdAt updatedAt ");
 
     if (!profile) {
       throw new ApiError(httpStatus.NOT_FOUND, "User not found", "");

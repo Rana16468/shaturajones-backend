@@ -31,7 +31,7 @@ router.patch(
     USER_ROLE.admin,
     USER_ROLE.superAdmin,
     USER_ROLE.cleaner,
-    USER_ROLE.cleaner
+    USER_ROLE.customer
    
   ),
   validationRequest(UserValidationSchema.ChangePasswordSchema),

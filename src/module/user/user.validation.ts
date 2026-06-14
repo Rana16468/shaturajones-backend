@@ -41,11 +41,11 @@ const UserVerification = z.object({
 
 const ChangePasswordSchema = z.object({
   body: z.object({
-    oldpassword: z
+    oldPassword: z
       .string({ required_error: 'Old password is required' })
       .min(6, 'Minimum 6 characters required'),
 
-    newpassword: z
+    newPassword: z
       .string({ required_error: 'New password is required' })
       .min(6, 'Minimum 6 characters required'),
   }),
@@ -55,7 +55,7 @@ const ChangePasswordSchema = z.object({
 const UpdateUserProfileSchema = z.object({
   body: z.object({
     name: z.string().min(2).max(50).optional(),
-    photo: z.string().url('Invalid photo URL').optional(),
+    photo: z.string().optional(),
     location: z.string().optional(),
     phoneNumber: z.string().optional(),
     dateOfBirth: z.string().optional(),
@@ -88,15 +88,15 @@ const ForgotPasswordSchema = z.object({
 const verificationCodeSchema = z.object({
   body: z.object({
     verificationCode: z
-      .number({ required_error: 'Verification code is required' })
-      .min(1000, 'Minimum 4 digit code required'),
+      .string({ required_error: 'Verification code is required' })
+      
   }),
 });
 
 /* ---------------- RESET PASSWORD ---------------- */
 const resetPasswordSchema = z.object({
   body: z.object({
-    userId: z.string({ required_error: 'User ID is required' }),
+    token: z.string({ required_error: 'token is required' }),
 
     password: z
       .string({ required_error: 'Password is required' })
