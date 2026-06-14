@@ -1,0 +1,145 @@
+import { RequestHandler } from "express";
+
+import AuthServices from "./auth.services";
+
+import httpStatus from 'http-status';
+import config from "../../app/config";
+import sendResponse from "../../utility/sendRespone";
+import catchAsync from "../../utility/catchAsync";
+
+
+
+
+
+
+const loginUser: RequestHandler = catchAsync(async (req, res) => {
+  const result = await AuthServices.loginUserIntoDb(req.body);
+
+  const { refreshToken, accessToken } = result;
+  res.cookie("refreshToken", refreshToken, {
+    secure: config.NODE_ENV === "production",
+    httpOnly: true,
+  });
+  sendResponse(res, {
+    success: true,
+    statusCode: httpStatus.OK,
+    message: "Successfully Login",
+    data: {
+      accessToken,
+    },
+  });
+});
+
+const refreshToken: RequestHandler = catchAsync(async (req, res) => {
+  const { refreshToken } = req.cookies;
+
+
+  const result = await AuthServices.refreshTokenIntoDb(refreshToken);
+  sendResponse(res, {
+    success: true,
+    statusCode: httpStatus.OK,
+    message: "Access token is Retrived Successfully",
+    data: result,
+  });
+});
+
+const myProfile: RequestHandler = catchAsync(async (req, res) => {
+  const result = await AuthServices.myProfileIntoDb(req.user.id);
+  sendResponse(res, {
+    success: true,
+    statusCode: httpStatus.OK,
+    message: "Successfully find my profile",
+    data: result,
+  });
+});
+
+const changeMyProfile: RequestHandler = catchAsync(async (req, res) => {
+  const result = await AuthServices.changeMyProfileIntoDb(
+    req as any,
+    req.user.id
+  );
+  sendResponse(res, {
+    success: true,
+    statusCode: httpStatus.OK,
+    message: "Successfully Change My Profile",
+    data: result,
+  });
+});
+
+const findByAllUsersAdmin: RequestHandler = catchAsync(async (req, res) => {
+  const result = await AuthServices.findByAllUsersAdminIntoDb(req.query);
+
+  sendResponse(res, {
+    success: true,
+    statusCode: httpStatus.OK,
+    message: "Successfully Find All Users",
+    data: result,
+  });
+});
+
+const deleteAccount: RequestHandler = catchAsync(async (req, res) => {
+  const result = await AuthServices.deleteAccountIntoDb(req.params.id, req.user.role )
+  sendResponse(res, {
+    success: true,
+    statusCode: httpStatus.OK,
+    message: "Successfully Delete your account ",
+    data: result,
+  });
+});
+
+const isBlockAccount: RequestHandler = catchAsync(async (req, res) => {
+  const result = await AuthServices.isBlockAccountIntoDb(
+    req.params.id,
+    req.body,
+    req.user.role
+  );
+  sendResponse(res, {
+    success: true,
+    statusCode: httpStatus.OK,
+    message: "Successfully Change Status ",
+    data: result,
+  });
+});
+
+
+const deleteAdmin:RequestHandler=catchAsync(async(req , res)=>{
+
+    const result=await AuthServices.deleteAdminIntoDb(req.params.id);
+  sendResponse(res, {
+    success: true,
+    statusCode: httpStatus.OK,
+    message: "Successfully Delete ",
+    data: result,
+  });
+
+});
+
+
+const myAvatar:RequestHandler=catchAsync(async(req , res)=>{
+
+
+   const result= await AuthServices.myAvatarIntoDb(req.user.id);
+    sendResponse(res, {
+    success: true,
+    statusCode: httpStatus.OK,
+    message: "Successfully  Find My Avatar ",
+    data: result,
+  });
+})
+
+
+
+const AuthController = {
+  loginUser,
+  refreshToken,
+  myProfile,
+ changeMyProfile,
+  findByAllUsersAdmin,
+  deleteAccount,
+   isBlockAccount,
+   deleteAdmin,
+   myAvatar
+
+};
+
+export default AuthController;

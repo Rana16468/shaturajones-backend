@@ -13,7 +13,8 @@ import catchError from '../../app/error/catchError';
 import { jwtHelpers } from '../../app/helper/jwtHelpers';
 import config from '../../app/config';
 import { USER_ACCESSIBILITY } from './user.constant';
-import emailContext, { EmailTemplateManager } from '../../utility/emailcontext/sendvarificationData';
+import emailContext from '../../utility/emailcontext/sendvarificationData';
+
 
 
 
@@ -57,30 +58,16 @@ const createUserIntoDb = async (payload: TUser) => {
 
     })
 
-   // ১. প্লেইন টেক্সট ম্যানেজারটি ইনিশিয়ালাইজ করুন (এখানে কোনো themeColor লাগবে না)
-const emailTemplate = new EmailTemplateManager({
-  companyName: 'TechBangla IT Ltd'
-});
-
-try {
-  // ২. ইমেইলের বডি জেনারেট করুন
-  const emailBodyContent = emailTemplate.sendVerificationData(
-    payload.name || "User",
-    otp, // এটি অবশ্যই ৬ ডিজিটের একটি string হতে হবে (যেমন: "582491")
-    "User Verification Email"
-  );
-
-  // ৩. আপনার মেইলিং ফাংশনটি কল করুন
-  await sendEmail(
-    payload.email,
-    "User Verification Email",
-    emailBodyContent // এখানে জেনারেট হওয়া প্লেইন টেক্সটটি পাস হচ্ছে
-  );
-
-  console.log("OTP Email sent successfully!");
-} catch (error) {
-  console.error("Failed to send OTP email:", );
-}
+   // 3. send email
+    await sendEmail(
+      payload.email,
+      "User Verification Email",
+      emailContext.sendVerificationData(
+        payload.email,
+        Number(otp),
+        "User Verification Email"
+      )
+    );
 
     return {
       status: true,
@@ -301,35 +288,15 @@ const forgotPasswordIntoDb = async (payload: string | { email: string }) => {
     try {
       
 
-   try {
-  // ১. ইমেইল ম্যানেজার ইনিশিয়ালাইজ করুন (এখানে কোনো themeColor লাগবে না)
-  const emailTemplate = new EmailTemplateManager({
-    companyName: 'TechBangla IT Ltd'
-  });
-
-  // ২. ইমেইল পাঠানো এবং ডাটা পাস করা
   await sendEmail(
-    emailString, // ইউজারের ইমেইল অ্যাড্রেস
-    "User Verification Email",
-    emailTemplate.sendVerificationData(
-      result.name || "User",
-      String(otp), // ওটিপি-কে অবশ্যই string ফরম্যাটে পাস করা নিশ্চিত করুন
-      "User Verification Email"
-    )
-  );
-
-  // ইমেইল সফলভাবে চলে গেলে এখানে ট্রানজেকশন কমিট (Commit) করতে পারেন (যদি নিচে অলরেডি করা না থাকে)
-  // await session.commitTransaction();
-  // session.endSession();
-
-} catch (emailError: unknown) {
-  // কোনো কারণে ইমেইল ফেইল হলে ডাটাবেজ ট্রানজেকশন রোলব্যাক করা হচ্ছে
-  await session.abortTransaction();
-  session.endSession();
-  
-  // আপনার কাস্টম এরর হ্যান্ডলার ফাংশন
-  catchError(emailError, 'Failed to send verification email');
-}
+     emailString,
+      "User Verification Email",
+      emailContext.sendVerificationData(
+        emailString,
+        Number(otp),
+        "User Verification Email"
+      )
+    );
 
     } catch (emailError: unknown) {
       await session.abortTransaction();
@@ -660,6 +627,8 @@ const resendVerificationOtpIntoDb = async (email: string) => {
     },
     {upsert:true}
   );
+
+  
 
  
 

@@ -35,9 +35,7 @@ const createUserZodSchema = z.object({
 const UserVerification = z.object({
   body: z.object({
     verificationCode: z
-      .number({ required_error: 'Verification code is required' })
-      .min(100000, 'Verification code must be 6 digits')
-      .max(999999, 'Verification code must be 6 digits'),
+      .string({ required_error: 'Verification code is required' }),
   }),
 });
 
