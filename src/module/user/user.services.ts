@@ -316,7 +316,7 @@ const forgotPasswordIntoDb = async (payload: string | { email: string }) => {
 
 const verificationForgotUserIntoDb = async (
   payload: { verificationCode: string }
-): Promise<string> => {
+)=> {
   try{
 
     const { verificationCode } = payload;
@@ -398,7 +398,9 @@ const verificationForgotUserIntoDb = async (
     }
   );
 
-  return accessToken;
+  return {
+    accessToken
+  };
 
   }
   catch(error:unknown){

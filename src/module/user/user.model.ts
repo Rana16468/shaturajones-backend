@@ -115,6 +115,7 @@ const UserSchema = new Schema<TUser, UserModel>(
     phoneNumber: {
       type: String,
       required: false,
+      index: true , 
       default: null
     },
 
