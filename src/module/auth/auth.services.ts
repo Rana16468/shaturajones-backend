@@ -436,9 +436,6 @@ const deleteAdminIntoDb = async (id: string) => {
 }
 
 
-
-
-// ============== EXPORT SERVICES ==============
 const AuthServices = {
   loginUserIntoDb,
   refreshTokenIntoDb,

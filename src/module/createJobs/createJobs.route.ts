@@ -39,7 +39,36 @@ router.post(
 );
 
 router.get("/find_by_all_jobs", auth(USER_ROLE.customer, USER_ROLE.admin, USER_ROLE.superAdmin), CreateJobController.findByAllJobs);
+router.get("/find_by_specific_jobs/:id", auth( USER_ROLE.admin, USER_ROLE.superAdmin),CreateJobController.findBySpecificJobs);
 
+router.patch(
+  "/update_jobs/:id",
+  auth(USER_ROLE.admin, USER_ROLE.superAdmin),
+
+ 
+  upload.single("photo"),
+
+  (req: Request, res: Response, next: NextFunction) => {
+    try {
+      if (req.body.data) {
+        req.body = JSON.parse(req.body.data);
+      }
+
+      if (req.file) {
+      }
+  
+
+      next();
+    } catch (error) {
+      next(new ApiError(httpStatus.BAD_REQUEST, "Invalid JSON data", ""));
+    }
+  },
+
+  validationRequest(createJobValidation.updateCreateJobsZodSchema),
+  CreateJobController.updateJobs
+);
+
+router.delete("/delete_jobs/:id", auth(USER_ROLE.admin, USER_ROLE.superAdmin), CreateJobController.deleteJobs);
 
 const CreateJobsRouter=router
 
