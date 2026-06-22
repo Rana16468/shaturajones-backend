@@ -11,7 +11,7 @@ const moduleRouter = [
   { path: '/user', route: UserRouters },
   {path:"/auth", route: AuthRouter},
   {path:"/setting", route: SettingsRoutes},
-  {path:"/create_jobs", route: CreateJobsRouter}
+  {path:"/jobs", route: CreateJobsRouter}
 ];
 
 moduleRouter.forEach((v) => router.use(v.path, v.route));

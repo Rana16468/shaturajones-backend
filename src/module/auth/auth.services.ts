@@ -2,7 +2,6 @@ import mongoose from "mongoose";
 import { USER_ACCESSIBILITY } from "../user/user.constant";
 
 import fs from "fs";
-import path from "path";
 import users from "../user/user.model";
 import ApiError from "../../app/error/ApiError";
 import httpStatus from "http-status";
@@ -12,6 +11,7 @@ import catchError from "../../app/error/catchError";
 import QueryBuilder from "../../app/builder/QueryBuilder";
 import { user_search_filed } from "./auth.constant";
 import { TUser } from "../user/user.interface";
+import { cache } from "../createJobs/createJobs.constant";
 
 
 
@@ -287,12 +287,16 @@ const findByAllUsersAdminIntoDb = async (
   query: Record<string, unknown>,
 ) => {
   try {
-
+    const cacheKey = `admin_users_${JSON.stringify(query)}`;
+    const cachedData = cache.get(cacheKey);
+    if (cachedData) {
+      return cachedData;
+    }
 
     const allUsersQuery = new QueryBuilder(
       users
         .find({ isVerify: true })
-        .select("-password -isDelete  -verificationCode") 
+        .select("-password -isDelete -verificationCode")
         .lean(),
       query
     )
@@ -305,9 +309,16 @@ const findByAllUsersAdminIntoDb = async (
     const all_admin_users = await allUsersQuery.modelQuery;
     const meta = await allUsersQuery.countTotal();
 
-    return { meta, all_admin_users };
+    const result = {
+      meta,
+      data: all_admin_users,
+    };
+
+    cache.set(cacheKey, result);
+
+    return result;
   } catch (error: unknown) {
-    catchError(error, 'Failed to fetch all_admin_users')
+    throw catchError(error, "Failed to fetch all_admin_users");
   }
 };
 

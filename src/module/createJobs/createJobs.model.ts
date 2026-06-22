@@ -1,5 +1,6 @@
 import { Schema, model } from "mongoose";
 import { CreateJobsModel, TCreateJobs } from "./createJobs.interface";
+import { JobType } from "./createJobs.constant";
 
 
 const availablePackageSchema = new Schema(
@@ -19,7 +20,7 @@ const availablePackageSchema = new Schema(
     },
   },
   {
-    _id: false,
+    _id: true,
   }
 );
 
@@ -31,8 +32,9 @@ const createJobsSchema = new Schema<TCreateJobs, CreateJobsModel>(
     },
     jobType: {
       type: String,
-      enum: ["CLEANING"],
-      required: true,
+      enum: [JobType.CLEANING],
+      required: false,
+      default: JobType.CLEANING 
     },
     isDelete: {
       type: Boolean,

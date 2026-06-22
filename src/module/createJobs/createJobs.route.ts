@@ -23,10 +23,10 @@ router.post(
         req.body = JSON.parse(req.body.data);
       }
 
-      // ✅ attach file path to body
       if (req.file) {
-        req.body.photo = req.file.path; // or req.file.filename
+        req.body.photo = req.file.path.replace(/\\/g, "/"); // or req.file.filename
       }
+  
 
       next();
     } catch (error) {
@@ -37,6 +37,9 @@ router.post(
   validationRequest(createJobValidation.createJobsZodSchema),
   CreateJobController.createJob
 );
+
+router.get("/find_by_all_jobs", auth(USER_ROLE.customer, USER_ROLE.admin, USER_ROLE.superAdmin), CreateJobController.findByAllJobs);
+
 
 const CreateJobsRouter=router
 

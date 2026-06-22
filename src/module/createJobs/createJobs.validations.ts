@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { JobType } from "./createJobs.constant";
 
 
  const availablePackageZodSchema = z.object({
@@ -24,7 +25,7 @@ import { z } from "zod";
     errorMap: () => ({
       message: "jobType must be CLEANING",
     }),
-  }),
+  }).default(JobType.CLEANING),
   photo: z.string().optional(),
 
   isDelete: z.boolean().optional(),

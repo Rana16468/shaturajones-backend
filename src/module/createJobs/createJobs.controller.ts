@@ -17,8 +17,21 @@ sendResponse(res, {
 
 });
 
+
+const  findByAllJobs:RequestHandler=catchAsync(async(req , res)=>{
+
+  const result=await CreateJobServices.findByAllJobsIntoDb(req.query);
+  sendResponse(res, {
+    success: true,
+    statusCode: httpStatus.OK,
+    message: "Successfully  Find By All Jobs",
+    data: result,
+  });
+})
+
 const CreateJobController={
-   createJob 
+   createJob ,
+   findByAllJobs
 };
 
 export default CreateJobController;
