@@ -6,6 +6,7 @@ import services from "./services.model";
 import { TServices } from "./services.interface";
 import { cache } from "../createJobs/createJobs.constant";
 import QueryBuilder from "../../app/builder/QueryBuilder";
+import { boolean } from "zod";
 
 const createNewJobsServicesIntoDb = async (
   userId: string,
@@ -116,7 +117,7 @@ const findMyAllServicesIntoDb = async (
     };
 
     const servicesQuery = new QueryBuilder(
-      services.find(baseFilter).select("-jobId -userId -selectedDate -isAccepted -isServiceStarted -isServiceEed -isAdvancePayment -isCompletePayment").lean(),
+      services.find(baseFilter).select("-jobId -userId -selectedDate  -isServiceStarted -isServiceEed -isAdvancePayment -isCompletePayment").lean(),
       query
     )
       .search([])
@@ -140,10 +141,44 @@ const findMyAllServicesIntoDb = async (
   }
 };
 
+const  deleteJobsServicesIntoDb=async(id: string):Promise<{
+    success: boolean,
+    message: string
+}>=>{
+
+
+     try{
+        const isExistJobs=await services.exists({_id: id, isAccepted: true });
+ if(isExistJobs){
+
+    return {
+        success: false,
+            message:"your jobs already accepted,  you can not delete"
+    }
+    
+ }
+
+        const result=await services.findByIdAndDelete(id);
+
+        if(!result){
+            throw new ApiError(httpStatus.NOT_EXTENDED, 'issues by the delete jobs services', "");
+        }
+        return{
+            success: true,
+            message:"successfully delete"
+        }
+
+     }
+catch (error) {
+    throw catchError(error);
+  }
+}
+
 
 const JobsServices = {
   createNewJobsServicesIntoDb,
-   findMyAllServicesIntoDb
+   findMyAllServicesIntoDb,
+   deleteJobsServicesIntoDb
 
 };
 

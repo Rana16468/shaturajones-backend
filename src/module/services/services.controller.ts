@@ -28,10 +28,24 @@ const findMyAllServices:RequestHandler=catchAsync(async(req , res)=>{
   });
 });
 
+const deleteJobsServices:RequestHandler=catchAsync(async(req , res)=>{
+
+
+
+      const result=await JobsServices.deleteJobsServicesIntoDb(req.params.id);
+       sendResponse(res, {
+    success: true,
+    statusCode: httpStatus.OK,
+    message: "Successfully  Delete Services",
+    data: result,
+  });
+})
+
 
 
 const JobsController={
     createNewJobsServices,
-    findMyAllServices
+    findMyAllServices,
+    deleteJobsServices
 };
 export default JobsController;

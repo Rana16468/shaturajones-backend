@@ -13,8 +13,11 @@ router.post("/create_service",
     JobsController.createNewJobsServices);
 
     router.get("/find_my_all_services", auth(USER_ROLE.customer), JobsController.findMyAllServices);
+    router.delete("/delete_jobs_services/:id", auth(USER_ROLE.customer), JobsController.deleteJobsServices);
 
-    
+
+
+
 
 const ServicesRouter=router;
 export default ServicesRouter;
