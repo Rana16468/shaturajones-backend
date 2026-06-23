@@ -105,6 +105,13 @@ const ServicesSchema = new Schema<TServices, ServicesModel>(
       index: true,
       default: false,
     },
+    totalAmount:{
+
+        type: Number,
+        required: true , 
+        default: 0.00
+
+    },
 
     isDelete: {
       type: Boolean,

@@ -4,6 +4,8 @@ import catchError from "../../app/error/catchError";
 import createjobs from "../createJobs/createJobs.model";
 import services from "./services.model";
 import { TServices } from "./services.interface";
+import { cache } from "../createJobs/createJobs.constant";
+import QueryBuilder from "../../app/builder/QueryBuilder";
 
 const createNewJobsServicesIntoDb = async (
   userId: string,
@@ -16,7 +18,7 @@ const createNewJobsServicesIntoDb = async (
       addJobsPackages = [],
     } = payload;
 
-    // 1. Check job exists
+    // 1. Get job with packages
     const job = await createjobs.findById(jobId);
 
     if (!job) {
@@ -33,40 +35,48 @@ const createNewJobsServicesIntoDb = async (
       };
     }
 
-    // 3. Validate available packages
-    const validPackageIds = new Set(
-      job.availablePackages.map((pkg: any) => pkg._id.toString())
-    );
+    // 3. Build map of available packages (id -> price)
+    const packageMap = new Map<string, number>();
 
-    const invalidPackages = availablePackagesService.filter(
-      (pkg) => !validPackageIds.has(pkg.availablePackageId)
-    );
+    job.availablePackages.forEach((pkg: any) => {
+      packageMap.set(pkg._id.toString(), pkg.price);
+    });
 
-    if (invalidPackages.length > 0) {
-      throw new ApiError(
-        httpStatus.BAD_REQUEST,
-        `Invalid package selection: ${invalidPackages
-          .map((p) => p.availablePackageId)
-          .join(", ")}`,
-        ""
-      );
+    // 4. Validate selected packages + calculate package total
+    let packageTotal = 0;
+
+    for (const pkg of availablePackagesService) {
+      const price = packageMap.get(pkg.availablePackageId.toString());
+
+      if (!price) {
+        throw new ApiError(
+          httpStatus.BAD_REQUEST,
+          `Invalid package selected: ${pkg.availablePackageId}`,
+          ""
+        );
+      }
+
+      packageTotal += price;
     }
 
-    // 4. REMOVE isDelete:true PACKAGES (IMPORTANT FIX)
-    const cleanedAddJobsPackages = addJobsPackages
-      .filter((pkg) => pkg.isDelete !== true)
-      .map((pkg) => ({
-        jobName: pkg.jobName?.trim(),
-        price: Number(pkg.price),
-        isDelete: false,
-      }));
+    // 5. Calculate addJobsPackages total (ignore isDelete:true)
+    const cleanedAddJobsPackages = addJobsPackages.filter(
+      (pkg) => pkg.isDelete !== true
+    );
 
-    // 5. Final DB insert
+    const addOnTotal = cleanedAddJobsPackages.reduce((sum, pkg) => {
+      return sum + Number(pkg.price || 0);
+    }, 0);
+
+    // 6. FINAL TOTAL
+    const totalAmount = packageTotal + addOnTotal;
+
+    // 7. Create service
     const newService = await services.create({
       ...payload,
       userId,
-      availablePackagesService,
       addJobsPackages: cleanedAddJobsPackages,
+      totalAmount,
     });
 
     if (!newService) {
@@ -79,15 +89,62 @@ const createNewJobsServicesIntoDb = async (
 
     return {
       success: true,
-      message: "Service created successfully",
+      message: `Service created successfully. Total: ${totalAmount}`,
     };
   } catch (error) {
     throw catchError(error);
   }
 };
 
+
+const findMyAllServicesIntoDb = async (
+  userId: string,
+  query: Record<string, unknown>
+) => {
+  try {
+    const cacheKey = `services_${userId}_${JSON.stringify(query)}`;
+
+    const cachedData = cache.get(cacheKey);
+    if (cachedData) {
+      return cachedData;
+    }
+
+    
+    const baseFilter = {
+      userId,
+      isDelete: { $ne: true },
+    };
+
+    const servicesQuery = new QueryBuilder(
+      services.find(baseFilter).select("-jobId -userId -selectedDate -isAccepted -isServiceStarted -isServiceEed -isAdvancePayment -isCompletePayment").lean(),
+      query
+    )
+      .search([])
+      .filter()
+      .sort()
+      .paginate()
+      .fields();
+
+    const data = await servicesQuery.modelQuery;
+    const meta = await servicesQuery.countTotal();
+
+    const result = {
+      meta,
+      data,
+    };
+    cache.set(cacheKey, result);
+
+    return result;
+  } catch (error) {
+    throw catchError(error);
+  }
+};
+
+
 const JobsServices = {
   createNewJobsServicesIntoDb,
+   findMyAllServicesIntoDb
+
 };
 
 export default JobsServices;

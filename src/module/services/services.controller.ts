@@ -17,8 +17,21 @@ const createNewJobsServices:RequestHandler=catchAsync(async(req , res)=>{
   });
 });
 
+const findMyAllServices:RequestHandler=catchAsync(async(req , res)=>{
+
+      const result=await JobsServices.findMyAllServicesIntoDb(req.user.id, req.query);
+   sendResponse(res, {
+    success: true,
+    statusCode: httpStatus.OK,
+    message: "Successfully  Find My All Services",
+    data: result,
+  });
+});
+
+
 
 const JobsController={
-    createNewJobsServices
+    createNewJobsServices,
+    findMyAllServices
 };
 export default JobsController;

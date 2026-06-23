@@ -12,5 +12,9 @@ router.post("/create_service",
      validationRequest(ServiceValidation.createServiceValidationSchema),
     JobsController.createNewJobsServices);
 
+    router.get("/find_my_all_services", auth(USER_ROLE.customer), JobsController.findMyAllServices);
+
+    
+
 const ServicesRouter=router;
 export default ServicesRouter;

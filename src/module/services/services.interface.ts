@@ -24,6 +24,7 @@ export interface TServices {
     isServiceEed: boolean;
     isAdvancePayment: boolean;
     isCompletePayment: boolean;
+    totalAmount: number;
     isDelete: boolean;
 }
 
