@@ -1,0 +1,581 @@
+import Stripe from "stripe";
+import { JwtPayload } from "jsonwebtoken";
+import httpStatus from "http-status";
+import { Types } from "mongoose";
+import mongoose from "mongoose";
+import config from "../../app/config";
+import users from "../user/user.model";
+import { USER_ACCESSIBILITY, USER_ROLE } from "../user/user.constant";
+import ApiError from "../../app/error/ApiError";
+import services from "../services/services.model";
+import payments from "./payment_gateway.model";
+import { payment_method, payment_status } from "./payment_gateway.constant";
+import { getSocketIO } from "../../socket/connectSocket";
+import notifications from "../notification/notification.model";
+
+
+
+const stripe = new Stripe(
+  config.stripe_payment_gateway.stripe_secret_key as string
+);
+
+// ─── Types ────────────────────────────────────────────────────────────────────
+
+interface PaymentDetails {
+  price: number;
+  serviceId: string;
+  description?: string;
+}
+
+interface UserDocument {
+  _id: Types.ObjectId;
+  stripeAccountId?: string;
+  email: string;
+}
+
+// ─── Helper: Create New Stripe Account + Onboarding Link ─────────────────────
+
+const createNewStripeAccountAndLink = async (
+  email: string,
+  userId: string
+): Promise<{ onboardingUrl: string }> => {
+  const account = await stripe.accounts.create({
+    type: "express",
+    email,
+    country: "US",
+    capabilities: {
+      card_payments: { requested: true },
+      transfers: { requested: true },
+    },
+    business_type: "individual",
+    settings: {
+      payouts: {
+        schedule: {
+          interval: "manual",
+        },
+      },
+    },
+  });
+
+  const onboardingLink = await stripe.accountLinks.create({
+    account: account.id,
+    refresh_url: `${config.stripe_payment_gateway.onboarding_refresh_url}?accountId=${account.id}`,
+    return_url: config.stripe_payment_gateway.onboarding_return_url,
+    type: "account_onboarding",
+  });
+
+  
+
+  const updatedUser = await users.findOneAndUpdate(
+    {
+      _id: userId,
+      isVerify: true,
+      status: USER_ACCESSIBILITY.isProgress,
+      
+    },
+    { $set: { stripeAccountId: account.id,isStripeConnected: true  } },
+    { new: true }
+  );
+
+  if (!updatedUser) {
+    throw new ApiError(
+      httpStatus.INTERNAL_SERVER_ERROR,
+      "Failed to store Stripe account ID in database",
+      ""
+    );
+  }
+
+  return { onboardingUrl: onboardingLink.url };
+};
+
+// ─── Main Service ─────────────────────────────────────────────────────────────
+
+const createConnectedAccountAndOnboardingLinkIntoDb = async (
+  userData: JwtPayload
+): Promise<
+  | { onboardingUrl: string }
+  | { card_payments?: string; transfers?: string }
+> => {
+
+ 
+  const normalUser = await users.findOne(
+    {
+      _id: userData.id,
+      isVerify: true,
+      status: USER_ACCESSIBILITY.isProgress,
+    },
+    { _id: 1, stripeAccountId: 1, email: 1 }
+  );
+  
+  if (!normalUser) {
+    throw new ApiError(
+      httpStatus.NOT_FOUND,
+      "User not found or restricted",
+      ""
+    );
+  }
+
+  // ─── CASE 1: User already has Stripe account ───────────────────────────────
+  if (normalUser.stripeAccountId) {
+    const onboardingLink = await stripe.accountLinks.create({
+      account: normalUser.stripeAccountId,
+      refresh_url: `${config.stripe_payment_gateway.onboarding_refresh_url}?accountId=${normalUser.stripeAccountId}`,
+      return_url: config.stripe_payment_gateway.onboarding_return_url,
+      type: "account_onboarding",
+    });
+
+    const account = await stripe.accounts.retrieve(normalUser.stripeAccountId);
+
+    const cardPayments = account.capabilities?.card_payments;
+    const transfers = account.capabilities?.transfers;
+
+    // If both inactive → reset account and recreate
+    if (cardPayments === "inactive" && transfers === "inactive") {
+      await users.findOneAndUpdate(
+        {
+          _id: userData.id,
+          isVerify: true,
+          status: USER_ACCESSIBILITY.isProgress,
+         
+        },
+        { $unset: { stripeAccountId: "" } },
+        { new: true }
+      );
+
+      return createNewStripeAccountAndLink(
+        normalUser.email,
+        userData.id
+      );
+    }
+
+    return {
+      card_payments: cardPayments,
+      transfers,
+    };
+  }
+
+  // ─── CASE 2: No Stripe account → create new ────────────────────────────────
+  return createNewStripeAccountAndLink(normalUser.email, userData.id);
+};
+
+
+// ─── Service: Refresh Onboarding Link ────────────────────────────────────────
+
+const updateOnboardingLinkIntoDb = async (
+  userId: string
+): Promise<{ link: string }> => {
+  const normalUser = await users.findOne<UserDocument>(
+    {
+      _id: userId,
+      isVerify: true,
+      status: USER_ACCESSIBILITY.isProgress,
+    },
+    { _id: 1, stripeAccountId: 1 }
+  );
+
+  if (!normalUser) {
+    throw new ApiError(
+      httpStatus.NOT_FOUND,
+      "User not found or is restricted",
+      ""
+    );
+  }
+
+  if (!normalUser.stripeAccountId) {
+    throw new ApiError(
+      httpStatus.BAD_REQUEST,
+      "No Stripe account found for this user",
+      ""
+    );
+  }
+
+  const accountLink = await stripe.accountLinks.create({
+    account: normalUser.stripeAccountId,
+    refresh_url: `${config.stripe_payment_gateway.onboarding_refresh_url}?accountId=${normalUser.stripeAccountId}`,
+    return_url: config.stripe_payment_gateway.onboarding_return_url,
+    type: "account_onboarding",
+  });
+
+  return { link: accountLink.url };
+};
+
+// ─── Service: Create Payment Intent ──────────────────────────────────────────
+
+const createPaymentIntent = async (
+  userId: string,
+  paymentDetails: Partial<PaymentDetails>
+): Promise<{ clientSecret: string | null; paymentIntentId: string }> => {
+  const { price, serviceId, description = "Truck service payment" } =
+    paymentDetails;
+
+  if (!price || price <= 0) {
+    throw new ApiError(
+      httpStatus.BAD_REQUEST,
+      "Price must be a positive number",
+      ""
+    );
+  }
+
+  if (!userId || !Types.ObjectId.isValid(userId)) {
+    throw new ApiError(httpStatus.BAD_REQUEST, "Valid user ID is required", "");
+  }
+
+  // FIX: was `Types.ObjectId.isValid(subscriptionId)` — inverted logic rejected valid IDs
+  if (!serviceId || !Types.ObjectId.isValid(serviceId)) {
+    throw new ApiError(
+      httpStatus.BAD_REQUEST,
+      "Valid serviceId is required",
+      ""
+    );
+  }
+
+  // FIX: fetch the user's connected Stripe account to use as the transfer destination
+  const user = await users.findOne<UserDocument>(
+    {
+      _id: userId,
+      isDelete: false,
+      isVerify: true,
+      status: USER_ACCESSIBILITY.isProgress,
+    },
+    { stripeAccountId: 1 }
+  );
+
+  if (!user?.stripeAccountId) {
+    throw new ApiError(
+      httpStatus.BAD_REQUEST,
+      "User does not have a connected Stripe account",
+      ""
+    );
+  }
+
+  const amountInCents = Math.round(price * 100);
+
+  const paymentIntent = await stripe.paymentIntents.create({
+    amount: amountInCents,
+    currency: "usd",
+    description,
+    metadata: {
+      serviceId,
+      userId,
+    },
+    application_fee_amount: Math.round(amountInCents * 0.05),
+    transfer_data: {
+      destination: user.stripeAccountId, // FIX: was empty string ""
+    },
+  });
+
+  return {
+    clientSecret: paymentIntent.client_secret,
+    paymentIntentId: paymentIntent.id,
+  };
+};
+
+// ─── Service: Retrieve Payment Status ────────────────────────────────────────
+
+const retrievePaymentStatus = async (
+  paymentIntentId: string
+): Promise<{
+  id: string;
+  status: string;
+  amount: number;
+  metadata: Record<string, string>;
+  created: string;
+}> => {
+  const paymentIntent = await stripe.paymentIntents.retrieve(paymentIntentId);
+
+  return {
+    id: paymentIntent.id,
+    status: paymentIntent.status,
+    amount: paymentIntent.amount / 100,
+    metadata: paymentIntent.metadata,
+    created: new Date(paymentIntent.created * 1000).toISOString(),
+  };
+};
+
+// ─── Service: Create Checkout Session for Subscription ───────────────────────
+
+const createCheckoutSessionForSubscription = async (
+  userId: string,
+  paymentDetails: PaymentDetails
+): Promise<{ checkoutUrl: string; sessionId: string }> => {
+  const session = await mongoose.startSession();
+  session.startTransaction();
+
+  try {
+    const { price, serviceId, description = "Subscription payment" } =
+      paymentDetails;
+
+    if (!price || price <= 0) {
+      throw new ApiError(
+        httpStatus.BAD_REQUEST,
+        "Price must be a positive number",
+        ""
+      );
+    }
+
+    if (!userId || !Types.ObjectId.isValid(userId)) {
+      throw new ApiError(
+        httpStatus.BAD_REQUEST,
+        "Valid user ID is required",
+        ""
+      );
+    }
+
+    const user = await users
+      .findOne<UserDocument>(
+        {
+          _id: userId,
+          isVerify: true,
+          status: USER_ACCESSIBILITY.isProgress,
+        },
+        { stripeAccountId: 1, email: 1 }
+      )
+      .session(session);
+
+    if (!user) {
+      throw new ApiError(
+        httpStatus.NOT_FOUND,
+        "User not found or not verified",
+        ""
+      );
+    }
+
+    const existingServices = await services
+      .exists({
+          _id: serviceId
+
+      })
+      .session(session);
+
+    if (!existingServices) {
+      throw new ApiError(httpStatus.NOT_FOUND, "Service not found", "");
+    }
+
+    const stripeSession = await stripe.checkout.sessions.create({
+      payment_method_types: ["card"],
+      line_items: [
+        {
+          price_data: {
+            currency: "usd",
+            product_data: {
+              name: "job services",
+              description,
+              metadata: { userId },
+            },
+            unit_amount: Math.round(price * 100),
+          },
+          quantity: 1,
+        },
+      ],
+      metadata: {
+        serviceId,
+        userId,
+      },
+      mode: "payment",
+      success_url: `${config.stripe_payment_gateway.checkout_success_url}?sessionId={CHECKOUT_SESSION_ID}`,
+      cancel_url: config.stripe_payment_gateway.checkout_cancel_url,
+    });
+
+    // Persist a pending payment record; final status is updated by the webhook
+    const payment = new payments({
+      currency: stripeSession.currency,
+      sessionId: stripeSession.id,
+     userId,
+      serviceId: existingServices._id,
+      payment_method: stripeSession.payment_method_types[0],
+      payment_status: stripeSession.payment_status,
+      price,
+      description,
+    });
+
+    const savedPayment = await payment.save({ session });
+    
+
+    if (!savedPayment) {
+      throw new ApiError(
+        httpStatus.INTERNAL_SERVER_ERROR,
+        "Failed to save payment record",
+        ""
+      );
+    }
+
+    // NOTE: currentsubscribers record is intentionally NOT created here.
+    // It is created in handleWebhookIntoDb once Stripe confirms payment via
+    // the `checkout.session.completed` event, preventing duplicate records.
+
+    await session.commitTransaction();
+
+    return {
+      checkoutUrl: stripeSession.url as string,
+      sessionId: stripeSession.id,
+    };
+  } catch (error: unknown) {
+    await session.abortTransaction();
+
+    if (error instanceof ApiError) throw error;
+
+    const message =
+      error instanceof Error ? error.message : "Unknown error occurred";
+    throw new ApiError(
+      httpStatus.SERVICE_UNAVAILABLE,
+      `Checkout service unavailable: ${message}`,
+      ""
+    );
+  } finally {
+    session.endSession();
+  }
+};
+
+// ─── Service: Handle Stripe Webhook ──────────────────────────────────────────
+
+const handleWebhookIntoDb = async (
+  event: any
+): Promise<{ status: boolean; message: string }> => {
+  const session = await mongoose.startSession();
+  session.startTransaction();
+
+  try {
+    let response = {
+      status: false,
+      message: "Unhandled event",
+    };
+
+    switch (event.type) {
+
+      case "payment_intent.succeeded": {
+        const paymentIntent = event.data.object;
+
+        if (!paymentIntent?.id) {
+          throw new ApiError(httpStatus.BAD_REQUEST, "Invalid payment intent", "");
+        }
+
+        await payments.updateOne(
+          { payment_intent: paymentIntent.id },
+          {
+            $set: {
+              payment_status: payment_status.paid,
+            },
+          },
+          { session }
+        );
+
+        response = {
+          status: true,
+          message: "Payment marked as PAID",
+        };
+
+        break;
+      }
+
+      case "checkout.session.completed": {
+        const sessionData = event.data.object;
+
+        const userId = sessionData.metadata?.userId;
+        const serviceId = sessionData.metadata?.serviceId;
+
+        if (!userId || !serviceId) {
+          throw new ApiError(httpStatus.BAD_REQUEST, "Missing metadata", "");
+        }
+
+        await payments.updateOne(
+          { sessionId: sessionData.id },
+          {
+            $set: {
+              userId,
+              serviceId,
+              sessionId: sessionData.id,
+              price: (sessionData.amount_total ?? 0) / 100,
+              currency: sessionData.currency ?? "usd",
+              paymentmethod: payment_method.card,
+              payment_status: payment_status.paid,
+              payable_name: sessionData.customer_details?.name ?? "",
+              payable_email: sessionData.customer_details?.email ?? "",
+              payment_intent: sessionData.payment_intent as string,
+              country: sessionData.customer_details?.address?.country ?? "",
+            },
+          },
+          { upsert: true, session }
+        );
+
+        const service = await services.findById(serviceId).session(session);
+
+        if (!service) {
+          throw new ApiError(httpStatus.NOT_FOUND, "Service not found", "");
+        }
+
+        if (!service.isAdvancePayment) {
+          service.isAdvancePayment = true;
+        }
+
+        service.isCompletePayment = true;
+        await service.save({ session });
+
+        const notification = new notifications({
+          userId,
+          title: "Payment Successful",
+          message: "Your payment has been completed successfully.",
+          isRead: false,
+          route: `/notification/${serviceId}`,
+        });
+
+        await notification.save({ session });
+
+        const io = getSocketIO() as any;
+
+        io.emit(`user::${USER_ROLE.admin}`, {
+          id: Date.now(),
+          title: "New Payment Received",
+          message: `User ${userId} completed payment`,
+          type: "payment",
+          timestamp: new Date().toISOString(),
+          sender: "system",
+        });
+
+        response = {
+          status: true,
+          message: "Checkout processed successfully",
+        };
+
+        break;
+      }
+
+      case "account.updated": {
+        response = {
+          status: true,
+          message: "Account updated",
+        };
+        break;
+      }
+      default: {
+        console.warn("Ignored Stripe event:", event.type);
+        break;
+      }
+    }
+
+    await session.commitTransaction();
+    return response;
+  } catch (error: any) {
+    console.error("🔥 Stripe Webhook Error:", error);
+
+    await session.abortTransaction();
+
+    throw new ApiError(
+      httpStatus.SERVICE_UNAVAILABLE,
+      error.message || "Webhook failed", ""
+    );
+  } finally {
+    session.endSession();
+  }
+};
+
+
+const PaymentGatewayServices = {
+  createConnectedAccountAndOnboardingLinkIntoDb,
+  updateOnboardingLinkIntoDb,
+  createPaymentIntent,
+  retrievePaymentStatus,
+  createCheckoutSessionForSubscription,
+  handleWebhookIntoDb,
+};
+
+export default PaymentGatewayServices;

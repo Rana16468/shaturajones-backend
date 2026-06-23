@@ -5,6 +5,7 @@ import AuthRouter from '../module/auth/auth.routes';
 import SettingsRoutes from '../module/settings/settings.routres';
 import CreateJobsRouter from '../module/createJobs/createJobs.route';
 import ServicesRouter from '../module/services/services.route';
+import NotificationRoute from '../module/notification/notification.route';
 
 const router = express.Router();
 const moduleRouter = [
@@ -13,7 +14,8 @@ const moduleRouter = [
   {path:"/auth", route: AuthRouter},
   {path:"/setting", route: SettingsRoutes},
   {path:"/jobs", route: CreateJobsRouter},
-  {path:"/services", route: ServicesRouter}
+  {path:"/services", route: ServicesRouter},
+  {path:"/notifications", route: NotificationRoute}
 ];
 
 moduleRouter.forEach((v) => router.use(v.path, v.route));

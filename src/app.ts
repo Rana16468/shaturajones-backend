@@ -6,18 +6,23 @@ import router from './router';
 import cookieParser from "cookie-parser";
 import config from './app/config';
 import path from 'path'
+import PaymentGatewayController from './module/payment_gateway/payment_gateway.controller';
 const app = express();
 
 app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
+
+
 //middlewere
 //credentials:true
 //https://shoes-client.vercel.app
 app.use(cors());
-
-
-
-
 app.use(cookieParser());
+app.post(
+  "/api/v1/payment_gateway/webhook",
+  express.raw({ type: "application/json" }),
+  PaymentGatewayController.handleWebhook
+);
 
 
 app.use(
