@@ -60,18 +60,22 @@ const TStripePaymentGateWaySchema = new Schema<
     payable_name: {
       type: String,
       required: [false, "payable name is not required"],
+      default: null,
     },
     payable_email: {
       type: String,
       required: [false, "payable email is not required"],
+      default: null,
     },
     payment_intent: {
       type: String,
+      default: null,
       required: [false, "payment intent is not required"],
     },
     country: {
       type: String,
       index: true,
+      default: null,
       required: [false, "country is not required"],
     },
 

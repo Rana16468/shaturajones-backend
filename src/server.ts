@@ -4,6 +4,7 @@ import app from "./app";
 import config from "./app/config";
 import ApiError from "./app/error/ApiError";
 import httpStatus from "http-status";
+import { connectSocket } from "./socket/connectSocket";
 
 let server: Server;
 
@@ -38,6 +39,8 @@ async function main() {
     server = app.listen(config.port, () => {
       console.log(`🚀 Server running on http://${config.host}:${config.port}`);
     });
+     connectSocket(server);
+    
 
     // -------------------------
     // Global Error Handlers

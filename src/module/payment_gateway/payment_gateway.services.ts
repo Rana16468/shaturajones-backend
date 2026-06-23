@@ -199,7 +199,7 @@ const updateOnboardingLinkIntoDb = async (
   return { link: accountLink.url };
 };
 
-// ─── Service: Create Payment Intent ──────────────────────────────────────────
+
 
 const createPaymentIntent = async (
   userId: string,
@@ -432,25 +432,31 @@ const handleWebhookIntoDb = async (
   event: any
 ): Promise<{ status: boolean; message: string }> => {
   const session = await mongoose.startSession();
-  session.startTransaction();
 
   try {
+    session.startTransaction();
+
     let response = {
       status: false,
       message: "Unhandled event",
     };
 
     switch (event.type) {
-
       case "payment_intent.succeeded": {
         const paymentIntent = event.data.object;
 
         if (!paymentIntent?.id) {
-          throw new ApiError(httpStatus.BAD_REQUEST, "Invalid payment intent", "");
+          throw new ApiError(
+            httpStatus.BAD_REQUEST,
+            "Invalid payment intent",
+            ""
+          );
         }
 
         await payments.updateOne(
-          { payment_intent: paymentIntent.id },
+          {
+            payment_intent: paymentIntent.id,
+          },
           {
             $set: {
               payment_status: payment_status.paid,
@@ -474,11 +480,17 @@ const handleWebhookIntoDb = async (
         const serviceId = sessionData.metadata?.serviceId;
 
         if (!userId || !serviceId) {
-          throw new ApiError(httpStatus.BAD_REQUEST, "Missing metadata", "");
+          throw new ApiError(
+            httpStatus.BAD_REQUEST,
+            "Missing metadata",
+            ""
+          );
         }
 
         await payments.updateOne(
-          { sessionId: sessionData.id },
+          {
+            sessionId: sessionData.id,
+          },
           {
             $set: {
               userId,
@@ -488,48 +500,75 @@ const handleWebhookIntoDb = async (
               currency: sessionData.currency ?? "usd",
               paymentmethod: payment_method.card,
               payment_status: payment_status.paid,
-              payable_name: sessionData.customer_details?.name ?? "",
-              payable_email: sessionData.customer_details?.email ?? "",
-              payment_intent: sessionData.payment_intent as string,
-              country: sessionData.customer_details?.address?.country ?? "",
+              payable_name:
+                sessionData.customer_details?.name ?? "",
+              payable_email:
+                sessionData.customer_details?.email ?? "",
+              payment_intent:
+                sessionData.payment_intent as string,
+              country:
+                sessionData.customer_details?.address?.country ?? "",
             },
           },
-          { upsert: true, session }
+          {
+            upsert: true,
+            session,
+          }
         );
 
-        const service = await services.findById(serviceId).session(session);
+        const service = await services
+          .findById(serviceId)
+          .session(session);
 
         if (!service) {
-          throw new ApiError(httpStatus.NOT_FOUND, "Service not found", "");
+          throw new ApiError(
+            httpStatus.NOT_FOUND,
+            "Service not found",
+            ""
+          );
         }
 
         if (!service.isAdvancePayment) {
           service.isAdvancePayment = true;
+          service.isCompletePayment = false;
         }
 
-        service.isCompletePayment = true;
+       
+        else if (!service.isCompletePayment) {
+          service.isCompletePayment = true;
+        }
+
         await service.save({ session });
 
         const notification = new notifications({
           userId,
           title: "Payment Successful",
-          message: "Your payment has been completed successfully.",
+          message:
+            "Your payment has been completed successfully.",
           isRead: false,
           route: `/notification/${serviceId}`,
         });
 
         await notification.save({ session });
 
-        const io = getSocketIO() as any;
+        try {
+          const io = getSocketIO();
 
-        io.emit(`user::${USER_ROLE.admin}`, {
-          id: Date.now(),
-          title: "New Payment Received",
-          message: `User ${userId} completed payment`,
-          type: "payment",
-          timestamp: new Date().toISOString(),
-          sender: "system",
-        });
+          if (io) {
+            io.emit(`user::${USER_ROLE.admin}`, {
+              id: Date.now(),
+              title: "New Payment Received",
+              message: `User ${userId} completed payment`,
+              type: "payment",
+              timestamp: new Date().toISOString(),
+              sender: "system",
+            });
+          }
+        } catch (error) {
+          console.log(
+            "Socket not initialized. Skipping realtime notification."
+          );
+        }
 
         response = {
           status: true,
@@ -546,22 +585,27 @@ const handleWebhookIntoDb = async (
         };
         break;
       }
+
       default: {
-        console.warn("Ignored Stripe event:", event.type);
+        console.warn(
+          `Ignored Stripe event: ${event.type}`
+        );
         break;
       }
     }
 
     await session.commitTransaction();
+
     return response;
   } catch (error: any) {
-    console.error("🔥 Stripe Webhook Error:", error);
-
     await session.abortTransaction();
+
+    console.error("🔥 Stripe Webhook Error:", error);
 
     throw new ApiError(
       httpStatus.SERVICE_UNAVAILABLE,
-      error.message || "Webhook failed", ""
+      error.message || "Webhook failed",
+      ""
     );
   } finally {
     session.endSession();

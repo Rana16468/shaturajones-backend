@@ -19,7 +19,6 @@ const stripe = new Stripe(
   config.stripe_payment_gateway.stripe_secret_key as string,
 );
 
-const webhook = config.stripe_payment_gateway.stripe_webhook_secret;
 
 const createConnectedAccountAndOnboardingLink:RequestHandler = catchAsync(
   async (req: Request, res: Response) => {
@@ -108,46 +107,57 @@ const createCheckoutSession = catchAsync(
 );
 
 
-const handleWebhook = catchAsync(async (req: Request, res: Response) => {
+const handleWebhook = async (req: Request, res: Response) => {
   const signature = req.headers["stripe-signature"] as string;
 
   if (!signature) {
-    throw new ApiError(httpStatus.BAD_REQUEST, "Missing stripe signature", "");
+    return res.status(400).json({
+      success: false,
+      message: "Missing stripe signature",
+    });
   }
+
   const rawBody = req.body;
 
-  if (!rawBody || !Buffer.isBuffer(rawBody)) {
-    throw new ApiError(
-      httpStatus.BAD_REQUEST,
-      "Invalid raw body (Stripe requires raw Buffer)",
-      ""
-    );
+  if (!rawBody) {
+    return res.status(400).json({
+      success: false,
+      message: "Missing raw body",
+    });
   }
 
-  let event: any;
+  let event: Stripe.Event;
 
   try {
     event = stripe.webhooks.constructEvent(
-      rawBody as any,
+      rawBody, 
       signature,
-      process.env.STRIPE_WEBHOOK_SECRET as string
+      config.stripe_payment_gateway.stripe_webhook_secret as string
     );
   } catch (err: any) {
-    throw new ApiError(
-      httpStatus.BAD_REQUEST,
-      `Webhook signature verification failed: ${err.message}`,
-      ""
-    );
+    return res.status(400).json({
+      success: false,
+      message: `Webhook signature verification failed: ${err.message}`,
+    });
   }
 
-  const result = await PaymentGatewayServices.handleWebhookIntoDb(event);
+  try {
+    const result = await PaymentGatewayServices.handleWebhookIntoDb(event);
 
-  return res.status(200).json({
-    success: true,
-    message: "Webhook received",
-    data: result,
-  });
-});
+    return res.status(200).json({
+      success: true,
+      message: "Webhook processed successfully",
+      data: result,
+    });
+  } catch (error: any) {
+    // ⚠️ don’t crash Stripe retry system
+    return res.status(500).json({
+      success: false,
+      message: "Webhook processing failed",
+      error: error.message,
+    });
+  }
+};
 
 
 
