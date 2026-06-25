@@ -150,7 +150,7 @@ const handleWebhook = async (req: Request, res: Response) => {
       data: result,
     });
   } catch (error: any) {
-    // ⚠️ don’t crash Stripe retry system
+   
     return res.status(500).json({
       success: false,
       message: "Webhook processing failed",
@@ -158,6 +158,17 @@ const handleWebhook = async (req: Request, res: Response) => {
     });
   }
 };
+
+const findByAllPayment:RequestHandler=catchAsync(async(req , res)=>{
+
+    const result =await PaymentGatewayServices.findByAllPaymentIntoDb(req.query);
+    sendResponse(res, {
+      statusCode: httpStatus.OK,
+      success: true,
+      message: 'Successfully Find By All Payment ',
+      data: result,
+    });
+})
 
 
 
@@ -169,7 +180,7 @@ const PaymentGatewayController = {
   getPaymentStatus,
   createCheckoutSession,
   handleWebhook,
-  
+  findByAllPayment
 };
 
 export default PaymentGatewayController;

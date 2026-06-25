@@ -11,3 +11,8 @@ export const payment_status = {
 export const search_query = [
   
 ];
+
+export const payment_search_filed=[
+  "payable_email",  "payable_name", "userId.country","userId.name"
+
+]

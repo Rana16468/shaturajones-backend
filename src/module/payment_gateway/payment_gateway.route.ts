@@ -56,5 +56,9 @@ router.post(
   PaymentGatewayController.handleWebhook,
 );
 
+router.get("/find_by_all_payment",
+   auth(USER_ROLE.admin),
+    PaymentGatewayController.findByAllPayment)
+
 
 export const PaymentGatewayRoutes = router;

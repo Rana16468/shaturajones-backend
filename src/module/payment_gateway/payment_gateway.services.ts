@@ -9,9 +9,12 @@ import { USER_ACCESSIBILITY, USER_ROLE } from "../user/user.constant";
 import ApiError from "../../app/error/ApiError";
 import services from "../services/services.model";
 import payments from "./payment_gateway.model";
-import { payment_method, payment_status } from "./payment_gateway.constant";
+import { payment_method, payment_search_filed, payment_status } from "./payment_gateway.constant";
 import { getSocketIO } from "../../socket/connectSocket";
 import notifications from "../notification/notification.model";
+import catchError from "../../app/error/catchError";
+import QueryBuilder from "../../app/builder/QueryBuilder";
+import { cache } from "../createJobs/createJobs.constant";
 
 
 
@@ -611,6 +614,56 @@ const handleWebhookIntoDb = async (
   }
 };
 
+const findByAllPaymentIntoDb = async (
+  query: Record<string, unknown>
+) => {
+  try {
+    const cacheKey = `payments_${JSON.stringify(query)}`;
+
+    const cachedData = cache.get(cacheKey);
+    if (cachedData) {
+      return cachedData;
+    }
+
+    const allPaymentsQuery = new QueryBuilder(
+      payments
+        .find({ payment_status: payment_status.paid }).populate([
+           {
+            path: "userId",
+            select: "name email location photo country phoneNumber",
+          },
+          {
+            path: "serviceId",
+            select: "jobId selectedDate  isAccepted isServiceStarted isServiceEed isAdvancePayment isCompletePayment totalAmount",
+          },
+        ])
+        .lean(),
+      query
+    )
+      .search(payment_search_filed)
+      .filter()
+      .sort()
+      .paginate()
+      .fields();
+
+    const allPayments = await allPaymentsQuery.modelQuery;
+    const meta = await allPaymentsQuery.countTotal();
+
+    const result = {
+      meta,
+      data: allPayments,
+    };
+
+    cache.set(cacheKey, result);
+
+    return result;
+  } catch (error) {
+    throw catchError(error);
+  }
+};
+
+
+
 
 const PaymentGatewayServices = {
   createConnectedAccountAndOnboardingLinkIntoDb,
@@ -619,6 +672,7 @@ const PaymentGatewayServices = {
   retrievePaymentStatus,
   createCheckoutSessionForSubscription,
   handleWebhookIntoDb,
+  findByAllPaymentIntoDb
 };
 
 export default PaymentGatewayServices;
