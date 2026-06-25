@@ -1,7 +1,98 @@
+import httpStatus from "http-status";
+import ApiError from "../../app/error/ApiError";
 import catchError from "../../app/error/catchError";
 import { cache } from "../createJobs/createJobs.constant";
-import { payment_status } from "../payment_gateway/payment_gateway.constant";
+import { TCleanerDistribution } from "./cleanerDistribusation.interface";
+import cleanerdistributions from "./cleanerDistribusation.model";
+import services from "../services/services.model";
+import notifications from "../notification/notification.model";
+import { getSocketIO } from "../../socket/connectSocket";
 import payments from "../payment_gateway/payment_gateway.model";
+import { payment_status } from "../payment_gateway/payment_gateway.constant";
+
+const isAcceptedJobOfferIntoDb = async (
+    userId: string,
+    payload: TCleanerDistribution
+) => {
+    try {
+
+        // Prevent duplicate acceptance by same cleaner
+        const alreadyAccepted = await cleanerdistributions.findOne({
+            serviceId: payload.serviceId,
+            userId,
+        });
+
+        if (alreadyAccepted) {
+            throw new ApiError(
+                httpStatus.BAD_REQUEST,
+                "You already accepted this service.",
+                ""
+            );
+        }
+
+        // Atomic update
+        const acceptedService = await services.findOneAndUpdate(
+            {
+                _id: payload.serviceId,
+                isAccepted: false,
+                isServiceStarted: false,
+                isDelete: false,
+            },
+            {
+                $set: {
+                    isAccepted: true,
+                },
+            },
+            {
+                new: true,
+            }
+        );
+
+        if (!acceptedService) {
+            throw new ApiError(
+                httpStatus.BAD_REQUEST,
+                "This service has already been accepted.",
+                ""
+            );
+        }
+
+        await cleanerdistributions.create({
+            ...payload,
+            userId,
+        });
+
+        const notification = new notifications({
+            userId: acceptedService.userId,
+            title: "Service Accepted",
+            message: "A cleaner has accepted your service request.",
+            isRead: false,
+        });
+
+        await notification.save();
+
+        try {
+            const io = getSocketIO();
+
+            io.to(`user::${acceptedService.userId}`).emit("notification", {
+                title: "Service Accepted",
+                message: "A cleaner has accepted your service request.",
+                type: "service",
+                timestamp: new Date().toISOString(),
+            });
+        } catch {
+            console.log("Socket not initialized.");
+        }
+
+        cache.flushAll();
+
+        return {
+            success: true,
+            message: "Service accepted successfully.",
+        };
+    } catch (error) {
+        throw catchError(error);
+    }
+};
 
 const findByAllServicesIntoDb = async (
   query: Record<string, any>
@@ -156,7 +247,8 @@ const findByAllServicesIntoDb = async (
 };
 
 const cleanerDistributionService={
-  findByAllServicesIntoDb
+      isAcceptedJobOfferIntoDb,
+      findByAllServicesIntoDb
 }
 
-export default cleanerDistributionService;
+export default cleanerDistributionService
