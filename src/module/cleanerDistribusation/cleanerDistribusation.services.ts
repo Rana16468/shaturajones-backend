@@ -9,6 +9,8 @@ import notifications from "../notification/notification.model";
 import { getSocketIO } from "../../socket/connectSocket";
 import payments from "../payment_gateway/payment_gateway.model";
 import { payment_status } from "../payment_gateway/payment_gateway.constant";
+import mongoose from "mongoose";
+import QueryBuilder from "../../app/builder/QueryBuilder";
 
 const isAcceptedJobOfferIntoDb = async (
     userId: string,
@@ -16,7 +18,6 @@ const isAcceptedJobOfferIntoDb = async (
 ) => {
     try {
 
-        // Prevent duplicate acceptance by same cleaner
         const alreadyAccepted = await cleanerdistributions.findOne({
             serviceId: payload.serviceId,
             userId,
@@ -30,7 +31,6 @@ const isAcceptedJobOfferIntoDb = async (
             );
         }
 
-        // Atomic update
         const acceptedService = await services.findOneAndUpdate(
             {
                 _id: payload.serviceId,
@@ -109,7 +109,7 @@ const findByAllServicesIntoDb = async (
     const limit = Number(query.limit) || 10;
     const skip = (page - 1) * limit;
 
-    const sortBy = (query.sortBy as string) || "createdAt";
+    const sortBy = query.sortBy || "createdAt";
     const sortOrder = query.sortOrder === "asc" ? 1 : -1;
 
     const matchStage: any = {
@@ -144,57 +144,98 @@ const findByAllServicesIntoDb = async (
         $match: matchStage,
       },
 
-      
+      // Service Lookup
       {
         $lookup: {
           from: "services",
           localField: "serviceId",
           foreignField: "_id",
-          as: "serviceId",
+          as: "service",
         },
       },
       {
-        $unwind: "$serviceId",
+        $unwind: "$service",
       },
 
       {
         $match: {
-          "serviceId.isAdvancePayment": true,
-          "serviceId.isAccepted": false,
-          "serviceId.isDelete": {
+          "service.isAdvancePayment": true,
+          "service.isCompletePayment": false,
+          "service.isAccepted": false,
+          "service.isDelete": {
             $ne: true,
           },
         },
       },
 
-      // User
+      // User Lookup
       {
         $lookup: {
           from: "users",
           localField: "userId",
           foreignField: "_id",
-          as: "userId",
+          as: "user",
         },
       },
       {
-        $unwind: "$userId",
+        $unwind: "$user",
+      },
+
+      // Remove duplicate services
+      {
+        $group: {
+          _id: "$service._id",
+
+          paymentId: {
+            $first: "$_id",
+          },
+
+          currency: {
+            $first: "$currency",
+          },
+
+          payment_status: {
+            $first: "$payment_status",
+          },
+
+          createdAt: {
+            $max: "$createdAt",
+          },
+
+          service: {
+            $first: "$service",
+          },
+
+          user: {
+            $first: "$user",
+          },
+        },
       },
 
       {
         $project: {
+          _id: "$paymentId",
           currency: 1,
           payment_status: 1,
-      
-          serviceId: {
-            _id: "$serviceId._id",
-            jobId: "$serviceId.jobId",
-            selectedDate: "$serviceId.selectedDate",
-            isAccepted: "$serviceId.isAccepted",
-            isAdvancePayment: "$serviceId.isAdvancePayment",
-            isCompletePayment: "$serviceId.isCompletePayment",
-            isServiceStarted: "$serviceId.isServiceStarted",
-            isServiceEed: "$serviceId.isServiceEed",
-            totalAmount: "$serviceId.totalAmount",
+          createdAt: 1,
+
+          user: {
+            _id: "$user._id",
+            name: "$user.name",
+            photo:"$user.photo",
+            
+          },
+
+          service: {
+            _id: "$service._id",
+            jobId: "$service.jobId",
+            selectedDate: "$service.selectedDate",
+            isAccepted: "$service.isAccepted",
+            isAdvancePayment: "$service.isAdvancePayment",
+            isCompletePayment: "$service.isCompletePayment",
+            isServiceStarted: "$service.isServiceStarted",
+            isServiceEed: "$service.isServiceEed",
+            totalAmount: "$service.totalAmount",
           },
         },
       },
@@ -246,9 +287,169 @@ const findByAllServicesIntoDb = async (
   }
 };
 
+const deleteJobOfferIntoDb = async (
+  serviceId: string,
+  cleanerId: string
+) => {
+  const session = await mongoose.startSession();
+
+  try {
+    session.startTransaction();
+
+    // Find service
+    const service = await services
+      .findOne(
+        {
+          _id: serviceId,
+          isAccepted: true,
+          isDelete: false,
+        },
+        {
+          userId: 1,
+        }
+      )
+      .session(session);
+
+    if (!service) {
+      throw new ApiError(
+        httpStatus.NOT_FOUND,
+        "Service not found or already cancelled.",
+        ""
+      );
+    }
+
+    // Reset service status
+    await services.findByIdAndUpdate(
+      serviceId,
+      {
+        $set: {
+          isAccepted: false,
+        },
+      },
+      {
+        new: true,
+        session,
+      }
+    );
+    await cleanerdistributions.findOneAndDelete(
+      {
+        serviceId,
+        userId: cleanerId,
+      },
+      {
+        session,
+      }
+    );
+
+    await notifications.create(
+      [
+        {
+          userId: service.userId,
+          title: "Service Cancelled",
+          message:
+            "The cleaner has cancelled the accepted service.",
+          isRead: false,
+        },
+      ],
+      { session }
+    );
+
+    await session.commitTransaction();
+
+    cache.flushAll();
+
+    try {
+      const io = getSocketIO();
+
+      io.to(`user::${service.userId}`).emit("notification", {
+        title: "Service Cancelled",
+        message: "The cleaner has cancelled the accepted service.",
+        type: "service",
+        timestamp: new Date().toISOString(),
+      });
+    } catch (err) {
+      console.log("Socket notification skipped.", err);
+    }
+
+    return {
+      success: true,
+      message: "Job offer cancelled successfully.",
+    };
+  } catch (error) {
+    await session.abortTransaction();
+    throw catchError(error);
+  } finally {
+    session.endSession();
+  }
+};
+
+const findMyAcceptedJobListIntoDb = async (
+  userId: string,
+  query: Record<string, any>
+) => {
+  try {
+    const cacheKey = `my_accepted_jobs_${userId}_${JSON.stringify(query)}`;
+
+    const cachedData = cache.get(cacheKey);
+    if (cachedData) {
+      return cachedData;
+    }
+
+    const allAcceptedJobsQuery = new QueryBuilder(
+      cleanerdistributions
+        .find({
+          userId,
+          isDelete: false,
+        })
+        .populate([
+          
+          {
+            path: "serviceId",
+            match: {
+              isAccepted: true,
+              isDelete: false,
+            },
+            select:
+              "addJobsPackages jobId selectedDate isAccepted isServiceStarted isServiceEed isAdvancePayment isCompletePayment totalAmount",
+            populate: {
+              path: "jobId",
+              select: "title category address",
+            },
+          },
+        ])
+        .lean(),
+      query
+    )
+      .search([])
+      .filter()
+      .sort()
+      .paginate()
+      .fields();
+
+    let data = await allAcceptedJobsQuery.modelQuery;
+
+    data = data.filter((item: any) => item.serviceId);
+
+    const meta = await allAcceptedJobsQuery.countTotal();
+
+    const response = {
+      meta,
+      data,
+    };
+
+    cache.set(cacheKey, response);
+
+    return response;
+  } catch (error) {
+    throw catchError(error);
+  }
+};
+
 const cleanerDistributionService={
       isAcceptedJobOfferIntoDb,
-      findByAllServicesIntoDb
+      findByAllServicesIntoDb,
+      deleteJobOfferIntoDb,
+      findMyAcceptedJobListIntoDb
 }
 
 export default cleanerDistributionService
