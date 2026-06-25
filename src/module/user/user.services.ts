@@ -14,6 +14,7 @@ import { jwtHelpers } from '../../app/helper/jwtHelpers';
 import config from '../../app/config';
 import { USER_ACCESSIBILITY } from './user.constant';
 import emailContext from '../../utility/emailcontext/sendvarificationData';
+import { cache } from '../createJobs/createJobs.constant';
 
 
 
@@ -470,9 +471,16 @@ const resetPasswordIntoDb = async (payload: {
 const getUserGrowthIntoDb = async (query: { year?: string }) => {
   try {
     const year = query.year ? parseInt(query.year) : new Date().getFullYear();
+
+    const cacheKey = `user_growth_${year}`;
+
+    const cachedData = cache.get(cacheKey);
+    if (cachedData) {
+      return cachedData;
+    }
+
     const previousYear = year - 1;
 
-    // Get current year stats
     const currentYearStats = await users.aggregate([
       {
         $match: {
@@ -510,7 +518,7 @@ const getUserGrowthIntoDb = async (query: { year?: string }) => {
               input: { $range: [1, 13] },
               as: "m",
               in: {
-                year: year,
+                year,
                 month: "$$m",
                 count: {
                   $let: {
@@ -538,7 +546,6 @@ const getUserGrowthIntoDb = async (query: { year?: string }) => {
       },
     ]);
 
-    // Get previous year total count
     const previousYearStats = await users.aggregate([
       {
         $match: {
@@ -556,28 +563,32 @@ const getUserGrowthIntoDb = async (query: { year?: string }) => {
     const currentYearTotal = currentYearStats[0]?.totalCount || 0;
     const previousYearTotal = previousYearStats[0]?.totalCount || 0;
 
-    // Calculate year-over-year growth percentage
     let yearlyGrowth = 0;
+
     if (previousYearTotal > 0) {
-      yearlyGrowth = ((currentYearTotal - previousYearTotal) / previousYearTotal) * 100;
+      yearlyGrowth =
+        ((currentYearTotal - previousYearTotal) / previousYearTotal) * 100;
     } else if (currentYearTotal > 0) {
-      yearlyGrowth = 100; // If no users in previous year but users exist in current year
+      yearlyGrowth = 100;
     }
 
-    // Extract monthly stats
-    const monthlyStats = currentYearStats[0]?.months || [];
-
-    return {
-      monthlyStats,
-      yearlyGrowth: parseFloat(yearlyGrowth.toFixed(2)),
+    const result = {
+      monthlyStats: currentYearStats[0]?.months || [],
+      yearlyGrowth: Number(yearlyGrowth.toFixed(2)),
       year,
     };
+
+    // Store in cache
+    cache.set(cacheKey, result);
+
+    return result;
   } catch (error) {
-  catchError(error, 'server error by the get user growth into db section '  );
-    
+    catchError(
+      error,
+      "server error by the get user growth into db section"
+    );
   }
 };
-
 
 const resendVerificationOtpIntoDb = async (email: string) => {
   try{
@@ -588,7 +599,6 @@ const resendVerificationOtpIntoDb = async (email: string) => {
     );
   }
 
-  // 1️⃣ Find user
   const user = await users.findOne(
     {
       email,
