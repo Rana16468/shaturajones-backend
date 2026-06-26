@@ -58,13 +58,37 @@ const cleanerCompletedJobGraph:RequestHandler=catchAsync(async(req , res)=>{
       message: 'Successfully  Find My Complete Job Graph ',
       data: result,
     });
+});
+
+const findMyAllRecentEarning:RequestHandler=catchAsync(async(req , res)=>{
+
+    const result=await cleanerDistributionService.findMyAllRecentEarningIntoDb(req.query, req.user.id);
+    sendResponse(res, {
+      statusCode: httpStatus.OK,
+      success: true,
+      message: 'Successfully  Find My Earning ',
+      data: result,
+    });
+});
+
+const findMyEarningSummary:RequestHandler=catchAsync(async(req , res)=>{
+    
+  const result=await cleanerDistributionService.findMyEarningSummaryIntoDb(req.user.id);
+   sendResponse(res, {
+      statusCode: httpStatus.OK,
+      success: true,
+      message: 'Successfully  Find My Earning Summary',
+      data: result,
+    });
 })
 const cleanerDistributionController={
       findByAllServices, 
       isAcceptedJobOffer,
       deleteJobOffer,
       findMyAcceptedJobList,
-      cleanerCompletedJobGraph
+      cleanerCompletedJobGraph,
+      findMyAllRecentEarning,
+      findMyEarningSummary
 };
 export default cleanerDistributionController
 

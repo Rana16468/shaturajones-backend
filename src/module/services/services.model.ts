@@ -125,6 +125,13 @@ const ServicesSchema = new Schema<TServices, ServicesModel>(
   }
 );
 
+ServicesSchema.virtual("payment", {
+  ref: "payments",
+  localField: "_id",
+  foreignField: "serviceId",
+  justOne: true,
+});
+
 ServicesSchema.pre('find', function (next) {
   this.find({ isDelete: { $ne: true } });
   next();

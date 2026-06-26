@@ -27,6 +27,14 @@ router.get("/find_my_job_completed_graph",
       auth(USER_ROLE.cleaner),
       cleanerDistributionController.cleanerCompletedJobGraph
 );
+router.get("/find_my_recent_earning", 
+      auth(USER_ROLE.cleaner),
+      cleanerDistributionController.findMyAllRecentEarning
+);
+
+router.get("/find_my_earning_summary", 
+      auth(USER_ROLE.cleaner),
+       cleanerDistributionController.findMyEarningSummary)
 
 
 

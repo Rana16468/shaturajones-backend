@@ -568,12 +568,210 @@ const cleanerCompletedJobGraphIntoDb=async(query: { year?: string })=>{
 
 }
 
+const findMyAllRecentEarningIntoDb = async (
+  query: Record<string, unknown>,
+  userId: string
+) => {
+  try {
+    const cacheKey = `my_recent_earning_${userId}_${JSON.stringify(query)}`;
+
+    const cachedData = cache.get(cacheKey);
+    if (cachedData) {
+      return cachedData;
+    }
+
+    const recentEarningQuery = new QueryBuilder(
+      cleanerdistributions
+        .find({
+          userId,
+          isDelete: false,
+        })
+        .populate([
+          {
+            path: "serviceId",
+            match: {
+              isAccepted: true,
+              isDelete: false,
+            },
+            select:
+              "  selectedDate isAccepted",
+            populate: [
+             
+              {
+                path: "payment",
+                match: {
+                  payment_status: payment_status.paid,
+                },
+                select:
+                  "price  payment_status  createdAt",
+              },
+            ],
+          },
+        ])
+        .lean(),
+      query
+    )
+      .search([])
+      .filter()
+      .sort()
+      .paginate()
+      .fields();
+
+    let data = await recentEarningQuery.modelQuery;
+
+    // remove null services
+    data = data.filter((item: any) => item.serviceId);
+
+    // only paid payment
+    data = data.filter(
+      (item: any) =>
+        item.serviceId.payment &&
+        item.serviceId.payment.payment_status === payment_status.paid
+    );
+
+    const meta = await recentEarningQuery.countTotal();
+
+    const response = {
+      meta,
+      data,
+    };
+
+    cache.set(cacheKey, response);
+
+    return response;
+  } catch (error) {
+    throw catchError(error);
+  }
+};
+
+const findMyEarningSummaryIntoDb = async (userId: string) => {
+  try {
+    const cacheKey = `my_earning_summary_${userId}`;
+
+    const cachedData = cache.get(cacheKey);
+    if (cachedData) {
+      return cachedData;
+    }
+
+    const result = await cleanerdistributions.aggregate([
+      {
+        $match: {
+          userId: new mongoose.Types.ObjectId(userId),
+          isDelete: false,
+        },
+      },
+
+      {
+        $lookup: {
+          from: "services",
+          localField: "serviceId",
+          foreignField: "_id",
+          as: "service",
+        },
+      },
+      {
+        $unwind: "$service",
+      },
+      {
+        $match: {
+          "service.isDelete": false,
+          "service.isAccepted": true,
+          
+        },
+      },
+      {
+        $lookup: {
+          from: "payments",
+          let: {
+            serviceId: "$service._id",
+          },
+          pipeline: [
+            {
+              $match: {
+                $expr: {
+                  $and: [
+                    {
+                      $eq: ["$serviceId", "$$serviceId"],
+                    },
+                    {
+                      $eq: [
+                        "$payment_status",
+                        payment_status.paid,
+                      ],
+                    },
+                    {
+                      $eq: ["$isDelete", false],
+                    },
+                  ],
+                },
+              },
+            },
+          ],
+          as: "payments",
+        },
+      },
+      {
+        $match: {
+          payments: {
+            $ne: [],
+          },
+        },
+      },
+
+      {
+        $group: {
+          _id: null,
+
+          totalCompletedJobs: {
+            $sum: 1,
+          },
+
+          totalAmount: {
+            $sum: "$service.totalAmount",
+          },
+
+          totalAdvancePayment: {
+            $sum: {
+              $arrayElemAt: ["$payments.price", 0],
+            },
+          },
+        },
+      },
+
+      {
+        $project: {
+          _id: 0,
+          totalCompletedJobs: 1,
+          totalAmount: 1,
+          totalAdvancePayment: 1,
+        },
+      },
+    ]);
+
+    const response = result[0] || {
+      totalCompletedJobs: 0,
+      totalAmount: 0,
+      totalAdvancePayment: 0,
+    };
+
+    cache.set(cacheKey, response);
+
+    return response;
+  } catch (error) {
+    throw catchError(error);
+  }
+};
+
+
+
 const cleanerDistributionService={
       isAcceptedJobOfferIntoDb,
       findByAllServicesIntoDb,
       deleteJobOfferIntoDb,
       findMyAcceptedJobListIntoDb,
-      cleanerCompletedJobGraphIntoDb
+      cleanerCompletedJobGraphIntoDb,
+      findMyAllRecentEarningIntoDb,
+      findMyEarningSummaryIntoDb
 }
 
 export default cleanerDistributionService
