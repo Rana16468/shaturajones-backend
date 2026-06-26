@@ -49,13 +49,22 @@ const findMyAcceptedJobList:RequestHandler=catchAsync(async(req , res)=>{
       message: 'Successfully  Find My Job List ',
       data: result,
     });
+});
+const cleanerCompletedJobGraph:RequestHandler=catchAsync(async(req , res)=>{
+  const result=await cleanerDistributionService.cleanerCompletedJobGraphIntoDb(req.query);
+  sendResponse(res, {
+      statusCode: httpStatus.OK,
+      success: true,
+      message: 'Successfully  Find My Complete Job Graph ',
+      data: result,
+    });
 })
-
 const cleanerDistributionController={
       findByAllServices, 
       isAcceptedJobOffer,
       deleteJobOffer,
-      findMyAcceptedJobList
+      findMyAcceptedJobList,
+      cleanerCompletedJobGraph
 };
 export default cleanerDistributionController
 

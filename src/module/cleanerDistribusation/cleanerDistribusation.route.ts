@@ -23,6 +23,12 @@ router.get("/find_my_accepted_jobs",
       auth(USER_ROLE.cleaner), 
       cleanerDistributionController.findMyAcceptedJobList);
 
+router.get("/find_my_job_completed_graph",
+      auth(USER_ROLE.cleaner),
+      cleanerDistributionController.cleanerCompletedJobGraph
+);
+
+
 
 const cleanerDistributionRouter= router;
 export default cleanerDistributionRouter;
