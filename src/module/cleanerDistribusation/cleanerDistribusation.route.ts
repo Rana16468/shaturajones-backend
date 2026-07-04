@@ -20,7 +20,7 @@ router.delete("/rejected_job/:id",
         cleanerDistributionController.deleteJobOffer);
 
 router.get("/find_my_accepted_jobs", 
-      auth(USER_ROLE.cleaner), 
+      auth(USER_ROLE.cleaner, USER_ROLE.customer), 
       cleanerDistributionController.findMyAcceptedJobList);
 
 router.get("/find_my_job_completed_graph",

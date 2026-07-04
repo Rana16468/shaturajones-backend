@@ -39,7 +39,7 @@ router.post(
 );
 
 router.get("/find_by_all_jobs", auth(USER_ROLE.customer, USER_ROLE.admin, USER_ROLE.superAdmin), CreateJobController.findByAllJobs);
-router.get("/find_by_specific_jobs/:id", auth( USER_ROLE.admin, USER_ROLE.superAdmin),CreateJobController.findBySpecificJobs);
+router.get("/find_by_specific_jobs/:id", auth( USER_ROLE.admin,USER_ROLE.customer, USER_ROLE.superAdmin),CreateJobController.findBySpecificJobs);
 
 router.patch(
   "/update_jobs/:id",

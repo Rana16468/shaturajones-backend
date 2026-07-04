@@ -19,7 +19,6 @@ const createNewJobsServicesIntoDb = async (
       addJobsPackages = [],
     } = payload;
 
-    // 1. Get job with packages
     const job = await createjobs.findById(jobId);
 
     if (!job) {
@@ -43,7 +42,7 @@ const createNewJobsServicesIntoDb = async (
       packageMap.set(pkg._id.toString(), pkg.price);
     });
 
-    // 4. Validate selected packages + calculate package total
+    
     let packageTotal = 0;
 
     for (const pkg of availablePackagesService) {
@@ -110,15 +109,55 @@ const findMyAllServicesIntoDb = async (
       return cachedData;
     }
 
-    
-    const baseFilter = {
+    const { status } = query;
+
+    const baseFilter: Record<string, any> = {
       userId,
       isDelete: { $ne: true },
     };
 
+    switch (status) {
+      case "accepted":
+        baseFilter.isAccepted = true;
+        baseFilter.isServiceStarted = false;
+        baseFilter.isServiceEed = false;
+        break;
+
+      case "started":
+        baseFilter.isAccepted = true;
+        baseFilter.isServiceStarted = true;
+        baseFilter.isServiceEed = false;
+        break;
+
+      case "completed":
+        baseFilter.isAccepted = true;
+        baseFilter.isServiceStarted = true;
+        baseFilter.isServiceEed = true;
+        break;
+
+      case "pending":
+        baseFilter.isAccepted = false;
+        break;
+
+      case "all":
+      default:
+       
+        break;
+    }
+
+
+
+    const modifiedQuery = { ...query };
+    delete modifiedQuery.status;
+
     const servicesQuery = new QueryBuilder(
-      services.find(baseFilter).select("-jobId -userId -selectedDate  -isServiceStarted -isServiceEed -isAdvancePayment -isCompletePayment").lean(),
-      query
+      services
+        .find(baseFilter)
+        .select(
+          "-jobId -userId -selectedDate -isAdvancePayment -isCompletePayment"
+        )
+        .lean(),
+      modifiedQuery
     )
       .search([])
       .filter()
@@ -133,6 +172,7 @@ const findMyAllServicesIntoDb = async (
       meta,
       data,
     };
+
     cache.set(cacheKey, result);
 
     return result;
@@ -172,7 +212,8 @@ const  deleteJobsServicesIntoDb=async(id: string):Promise<{
 catch (error) {
     throw catchError(error);
   }
-}
+};
+
 
 
 const JobsServices = {

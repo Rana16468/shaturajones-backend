@@ -26,6 +26,7 @@ const loginUser: RequestHandler = catchAsync(async (req, res) => {
     message: "Successfully Login",
     data: {
       accessToken,
+      refreshToken
     },
   });
 });
