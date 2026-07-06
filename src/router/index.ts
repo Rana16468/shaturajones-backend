@@ -8,6 +8,7 @@ import ServicesRouter from '../module/services/services.route';
 import NotificationRoute from '../module/notification/notification.route';
 import { PaymentGatewayRoutes } from '../module/payment_gateway/payment_gateway.route';
 import cleanerDistributionRouter from '../module/cleanerDistribusation/cleanerDistribusation.route';
+import WorkProgressRouter from '../module/workProgress/workProgress.route';
 
 const router = express.Router();
 const moduleRouter = [
@@ -19,7 +20,8 @@ const moduleRouter = [
   {path:"/services", route: ServicesRouter},
   {path:"/notifications", route: NotificationRoute},
   {path:"/payment_gateway", route: PaymentGatewayRoutes},
-  {path:"/distribution_jobs", route: cleanerDistributionRouter}
+  {path:"/distribution_jobs", route: cleanerDistributionRouter},
+  {path:"/work_progress", route: WorkProgressRouter}
 ];
 
 moduleRouter.forEach((v) => router.use(v.path, v.route));
