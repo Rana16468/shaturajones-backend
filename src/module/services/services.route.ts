@@ -16,6 +16,9 @@ router.post("/create_service",
     router.delete("/delete_jobs_services/:id", auth(USER_ROLE.customer), JobsController.deleteJobsServices);
 
 
+    router.get("/find_by_specific_service/:id", auth(USER_ROLE.customer,USER_ROLE.cleaner), JobsController.findBySpecificService);
+
+
 
 
 

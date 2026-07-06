@@ -1,8 +1,7 @@
 import { z } from "zod";
 
- const createServiceValidationSchema = z.object({
+const createServiceValidationSchema = z.object({
   body: z.object({
-   
     jobId: z
       .string({
         required_error: "Job ID is required",
@@ -17,6 +16,21 @@ import { z } from "zod";
               required_error: "Available Package ID is required",
             })
             .min(1, "Available Package ID is required"),
+
+          isDelete: z.boolean().optional().default(false),
+        })
+      )
+      .optional(),
+
+   
+    addOnsService: z
+      .array(
+        z.object({
+          addOnsId: z
+            .string({
+              required_error: "AddOns ID is required",
+            })
+            .min(1, "AddOns ID is required"),
 
           isDelete: z.boolean().optional().default(false),
         })
@@ -61,7 +75,8 @@ import { z } from "zod";
   }),
 });
 
-const ServiceValidation={
-    createServiceValidationSchema
-}
-export default ServiceValidation
+const ServiceValidation = {
+  createServiceValidationSchema,
+};
+
+export default ServiceValidation;

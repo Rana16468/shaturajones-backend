@@ -6,7 +6,7 @@ import services from "./services.model";
 import { TServices } from "./services.interface";
 import { cache } from "../createJobs/createJobs.constant";
 import QueryBuilder from "../../app/builder/QueryBuilder";
-import { boolean } from "zod";
+
 
 const createNewJobsServicesIntoDb = async (
   userId: string,
@@ -16,17 +16,23 @@ const createNewJobsServicesIntoDb = async (
     const {
       jobId,
       availablePackagesService = [],
+      addOnsService = [],
       addJobsPackages = [],
     } = payload;
 
+    // Find Job
     const job = await createjobs.findById(jobId);
 
     if (!job) {
       throw new ApiError(httpStatus.NOT_FOUND, "Job not found", "");
     }
 
-    // 2. Prevent duplicate service
-    const isServiceExist = await services.exists({ jobId });
+    // Prevent duplicate service
+    const isServiceExist = await services.exists({
+      jobId,
+      userId,
+      isDelete: { $ne: true },
+    });
 
     if (isServiceExist) {
       return {
@@ -35,23 +41,48 @@ const createNewJobsServicesIntoDb = async (
       };
     }
 
-    // 3. Build map of available packages (id -> price)
+    /**
+     * ------------------------------------------
+     * Build Available Package Price Map
+     * ------------------------------------------
+     */
     const packageMap = new Map<string, number>();
 
     job.availablePackages.forEach((pkg: any) => {
-      packageMap.set(pkg._id.toString(), pkg.price);
+      if (!pkg.isDelete) {
+        packageMap.set(pkg._id.toString(), Number(pkg.price));
+      }
     });
 
-    
+    /**
+     * ------------------------------------------
+     * Build AddOns Price Map
+     * ------------------------------------------
+     */
+    const addOnsMap = new Map<string, number>();
+
+    job.addOns.forEach((addon: any) => {
+      if (!addon.isDelete) {
+        addOnsMap.set(addon._id.toString(), Number(addon.price));
+      }
+    });
+
+    /**
+     * ------------------------------------------
+     * Calculate Available Packages Total
+     * ------------------------------------------
+     */
     let packageTotal = 0;
 
-    for (const pkg of availablePackagesService) {
-      const price = packageMap.get(pkg.availablePackageId.toString());
+    for (const item of availablePackagesService) {
+      if (item.isDelete) continue;
 
-      if (!price) {
+      const price = packageMap.get(item.availablePackageId.toString());
+
+      if (price === undefined) {
         throw new ApiError(
           httpStatus.BAD_REQUEST,
-          `Invalid package selected: ${pkg.availablePackageId}`,
+          `Invalid available package selected: ${item.availablePackageId}`,
           ""
         );
       }
@@ -59,22 +90,62 @@ const createNewJobsServicesIntoDb = async (
       packageTotal += price;
     }
 
-    // 5. Calculate addJobsPackages total (ignore isDelete:true)
+    /**
+     * ------------------------------------------
+     * Calculate AddOns Total
+     * ------------------------------------------
+     */
+    let addOnsTotal = 0;
+
+    for (const item of addOnsService) {
+      if (item.isDelete) continue;
+
+      const price = addOnsMap.get(item.addOnsId.toString());
+
+      if (price === undefined) {
+        throw new ApiError(
+          httpStatus.BAD_REQUEST,
+          `Invalid add-on selected: ${item.addOnsId}`,
+          ""
+        );
+      }
+
+      addOnsTotal += price;
+    }
+
+    /**
+     * ------------------------------------------
+     * Calculate Custom Job Packages Total
+     * ------------------------------------------
+     */
     const cleanedAddJobsPackages = addJobsPackages.filter(
-      (pkg) => pkg.isDelete !== true
+      (pkg) => !pkg.isDelete
     );
 
-    const addOnTotal = cleanedAddJobsPackages.reduce((sum, pkg) => {
+    const customPackageTotal = cleanedAddJobsPackages.reduce((sum, pkg) => {
       return sum + Number(pkg.price || 0);
     }, 0);
 
-    // 6. FINAL TOTAL
-    const totalAmount = packageTotal + addOnTotal;
+    /**
+     * ------------------------------------------
+     * Final Total
+     * ------------------------------------------
+     */
+    const totalAmount =
+      packageTotal +
+      addOnsTotal +
+      customPackageTotal;
 
-    // 7. Create service
+    /**
+     * ------------------------------------------
+     * Create Service
+     * ------------------------------------------
+     */
     const newService = await services.create({
       ...payload,
       userId,
+      availablePackagesService,
+      addOnsService,
       addJobsPackages: cleanedAddJobsPackages,
       totalAmount,
     });
@@ -89,13 +160,12 @@ const createNewJobsServicesIntoDb = async (
 
     return {
       success: true,
-      message: `Service created successfully. Total: ${totalAmount}`,
+      message: `Service created successfully. Total Amount: ${totalAmount}`,
     };
   } catch (error) {
     throw catchError(error);
   }
 };
-
 
 const findMyAllServicesIntoDb = async (
   userId: string,
@@ -214,12 +284,40 @@ catch (error) {
   }
 };
 
+const findBySpecificServiceIntoDb = async (id: string) => {
+  try {
+    const cacheKey = `service_${id}`;
+
+    const cachedService = cache.get(cacheKey);
+
+    if (cachedService) {
+      return cachedService;
+    }
+    const service = await services.findById(id).lean();
+
+    if (!service) {
+      throw new ApiError(
+        httpStatus.NOT_FOUND,
+        "Service not found",
+        ""
+      );
+    }
+
+    cache.set(cacheKey, service);
+
+    return service;
+  } catch (error) {
+    throw catchError(error);
+  }
+};
+
 
 
 const JobsServices = {
   createNewJobsServicesIntoDb,
    findMyAllServicesIntoDb,
-   deleteJobsServicesIntoDb
+   deleteJobsServicesIntoDb,
+   findBySpecificServiceIntoDb
 
 };
 

@@ -36,6 +36,21 @@ const AvailablePackagesServiceSchema = new Schema(
   { _id: true }
 );
 
+const AddOnsServiceSchema = new Schema(
+  {
+    addOnsId: {
+      type: Schema.Types.ObjectId,
+      required: true,
+      ref: "createjobs",
+    },
+    isDelete: {
+      type: Boolean,
+      default: false,
+    },
+  },
+  { _id: true }
+);
+
 const ServicesSchema = new Schema<TServices, ServicesModel>(
   {
     userId: {
@@ -57,6 +72,13 @@ const ServicesSchema = new Schema<TServices, ServicesModel>(
       required: false,
       index: true,
       default: [],
+    },
+    addOnsService:{
+      type: [AddOnsServiceSchema],
+      required: false,
+      index: true,
+      default: [],
+
     },
 
     addJobsPackages: {

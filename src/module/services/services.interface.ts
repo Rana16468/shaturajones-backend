@@ -11,12 +11,17 @@ export type AvailablePackagesService ={
     isDelete: boolean;
 
 }
+export type AddOnsService ={
+    addOnsId: Types.ObjectId;
+    isDelete: boolean;
+}
 
 export interface TServices {
 
     userId: Types.ObjectId;
     jobId: Types.ObjectId;
     availablePackagesService?:AvailablePackagesService[]
+    addOnsService?:AddOnsService[]
     addJobsPackages?: AddJobsPackages[]
     selectedDate: Date;
     isAccepted: boolean;
