@@ -25,8 +25,19 @@ const  afterWorking:RequestHandler =catchAsync(async (req, res) => {
     });
 });
 
+const findBySpecificServiceId:RequestHandler =catchAsync(async (req, res) => {
+  const result = await WorkingProgressServices.findBySpecificServiceIdIntoDb(req.params.serviceId, req.user.role);
+ sendResponse(res, {
+      success: true,
+      statusCode: httpStatus.OK,
+      message: 'Successfully Find By Specific ServiceId',
+      data: result,
+    });
+});
+
 const WorkingProgressController={
       beforeWorking,
-      afterWorking
+      afterWorking,
+      findBySpecificServiceId
 };
 export default WorkingProgressController;

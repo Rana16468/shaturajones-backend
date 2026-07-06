@@ -5,6 +5,8 @@ import services from "../services/services.model";
 import { TWorkProgress } from "./workProgress.interface";
 import workprogress from "./workProgress.model";
 import mongoose from "mongoose";
+import { USER_ROLE } from "../user/user.constant";
+import { cache } from "../createJobs/createJobs.constant";
 
 
 const beforeWorkingIntoDb = async (
@@ -35,6 +37,8 @@ const beforeWorkingIntoDb = async (
       };
     }
 
+    console.log("payload.serviceId", payload.serviceId);
+
     const isExistService = await services
       .findOne({
         _id: payload.serviceId,
@@ -42,6 +46,7 @@ const beforeWorkingIntoDb = async (
       .select("jobId userId")
       .session(session)
       .lean();
+      
 
     if (!isExistService) {
       throw new ApiError(
@@ -50,6 +55,8 @@ const beforeWorkingIntoDb = async (
         ""
       );
     }
+
+    
 
     const [result] = await workprogress.create(
       [
@@ -205,11 +212,62 @@ const afterWorkingIntoDb = async (
   }
 };
 
+const findBySpecificServiceIdIntoDb = async (
+  serviceId: string,
+  role: string
+) => {
+  try {
+    const cacheKey = `work_progress:${serviceId}:${role}`;
+
+    const cachedData = cache.get(cacheKey);
+
+    if (cachedData) {
+      return cachedData;
+    }
+
+    const populatePath =
+      role === USER_ROLE.customer
+        ? "customerId"
+        : role === USER_ROLE.cleaner
+        ? "cleanerId"
+        : null;
+
+    if (!populatePath) {
+      throw new Error("Invalid user role.");
+    }
+
+    const workProgress = await workprogress
+      .findOne({
+        serviceId,
+        isDelete: { $ne: true },
+      })
+      .populate([
+        {
+          path: populatePath,
+          select: "name email location photo country phoneNumber",
+        },
+        {
+          path: "serviceId",
+          select:
+            "jobId selectedDate isAccepted isServiceStarted isServiceEed isAdvancePayment isCompletePayment totalAmount",
+        },
+      ])
+      .lean();
+
+    cache.set(cacheKey, workProgress);
+
+    return workProgress;
+  } catch (error) {
+    throw catchError(error);
+  }
+};
+
 
 
 const WorkingProgressServices={
       beforeWorkingIntoDb,
-      afterWorkingIntoDb
+      afterWorkingIntoDb,
+      findBySpecificServiceIdIntoDb
 }
 
 export default WorkingProgressServices;

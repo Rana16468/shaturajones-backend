@@ -99,5 +99,12 @@ router.post(
 
   WorkingProgressController.afterWorking
 );
+router.get(
+  "/find_by_specific_service/:serviceId",
+  auth(USER_ROLE.cleaner, USER_ROLE.customer),
+          WorkingProgressController.findBySpecificServiceId
+);
+
+     
 
 export default router;
