@@ -88,13 +88,14 @@ const findBySpecificJobsIntoDb=async(id: string)=>{
 const updateJobsIntoDb = async (
   id: string,
   payload: Partial<TCreateJobs>
-) :Promise<{
-    success: boolean,
-    message: string
-}>=> {
+): Promise<{
+  success: boolean;
+  message: string;
+}> => {
   try {
     const {
       availablePackages,
+      addOns,
       photo,
       ...rest
     } = payload;
@@ -122,6 +123,11 @@ const updateJobsIntoDb = async (
       updateData.$set.availablePackages = availablePackages;
     }
 
+    // ✅ Update addOns
+    if (addOns) {
+      updateData.$set.addOns = addOns;
+    }
+
     const result = await createjobs.findByIdAndUpdate(
       id,
       updateData,
@@ -130,6 +136,7 @@ const updateJobsIntoDb = async (
         runValidators: true,
       }
     );
+
     if (photo && isExistJobs.photo) {
       try {
         if (fs.existsSync(isExistJobs.photo)) {
@@ -139,13 +146,18 @@ const updateJobsIntoDb = async (
         console.log("Photo delete failed:", err);
       }
     }
-    if(!result){
-        throw new ApiError(httpStatus.NOT_EXTENDED, "issues by the update jobs", "")
+
+    if (!result) {
+      throw new ApiError(
+        httpStatus.NOT_EXTENDED,
+        "issues by the update jobs",
+        ""
+      );
     }
 
     return {
-        success:  true , 
-        message:"successfully update jobs"
+      success: true,
+      message: "Successfully updated jobs",
     };
   } catch (error) {
     throw catchError(error);

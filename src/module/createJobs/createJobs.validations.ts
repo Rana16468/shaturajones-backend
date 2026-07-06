@@ -1,8 +1,7 @@
 import { z } from "zod";
 import { JobType } from "./createJobs.constant";
 
-
- const availablePackageZodSchema = z.object({
+const availablePackageZodSchema = z.object({
   jobName: z.string({
     required_error: "jobName is required",
   }),
@@ -15,62 +14,112 @@ import { JobType } from "./createJobs.constant";
 });
 
 const updateAvailablePackageZodSchema = z.object({
-  jobName: z.string({
-    required_error: "jobName is required",
-  }).optional(),
+  jobName: z
+    .string({
+      required_error: "jobName is required",
+    })
+    .optional(),
 
-  price: z.number({
-    required_error: "price is required",
-  }).optional(),
+  price: z
+    .number({
+      required_error: "price is required",
+    })
+    .optional(),
 
   isDelete: z.boolean().optional(),
 });
 
 
- const createJobsZodSchema = z.object({
-   body: z.object({
-    jobName: z.string({
+const addOnsZodSchema = z.object({
+  jobName: z.string({
     required_error: "jobName is required",
   }),
 
-  jobType: z.literal("CLEANING", {
-    errorMap: () => ({
-      message: "jobType must be CLEANING",
-    }),
-  }).default(JobType.CLEANING),
-  photo: z.string().optional(),
+  price: z.number({
+    required_error: "price is required",
+  }),
 
   isDelete: z.boolean().optional(),
-
-  rating: z.number().optional(),
-
-  availablePackages: z.array(availablePackageZodSchema).default([]),
-   })
 });
 
- const updateCreateJobsZodSchema = z.object({
-   body: z.object({
+const updateAddOnsZodSchema = z.object({
+  jobName: z
+    .string({
+      required_error: "jobName is required",
+    })
+    .optional(),
+
+  price: z
+    .number({
+      required_error: "price is required",
+    })
+    .optional(),
+
+  isDelete: z.boolean().optional(),
+});
+
+const createJobsZodSchema = z.object({
+  body: z.object({
     jobName: z.string({
-    required_error: "jobName is required",
-  }).optional(),
-
-  jobType: z.literal("CLEANING", {
-    errorMap: () => ({
-      message: "jobType must be CLEANING",
+      required_error: "jobName is required",
     }),
-  }).default(JobType.CLEANING).optional(),
-  photo: z.string().optional(),
 
-  isDelete: z.boolean().optional(),
+    jobType: z
+      .literal("CLEANING", {
+        errorMap: () => ({
+          message: "jobType must be CLEANING",
+        }),
+      })
+      .default(JobType.CLEANING),
 
-  rating: z.number().optional(),
+    photo: z.string().optional(),
 
-  availablePackages: z.array(updateAvailablePackageZodSchema).default([]).optional(),
-   })
+    isDelete: z.boolean().optional(),
+
+    rating: z.number().optional(),
+
+    availablePackages: z.array(availablePackageZodSchema).default([]),
+
+    addOns: z.array(addOnsZodSchema).default([]),
+  }),
 });
 
-const createJobValidation={
-    createJobsZodSchema,
-    updateCreateJobsZodSchema
-}
-export default createJobValidation
+const updateCreateJobsZodSchema = z.object({
+  body: z.object({
+    jobName: z
+      .string({
+        required_error: "jobName is required",
+      })
+      .optional(),
+
+    jobType: z
+      .literal("CLEANING", {
+        errorMap: () => ({
+          message: "jobType must be CLEANING",
+        }),
+      })
+      .default(JobType.CLEANING)
+      .optional(),
+
+    photo: z.string().optional(),
+
+    isDelete: z.boolean().optional(),
+
+    rating: z.number().optional(),
+
+    availablePackages: z
+      .array(updateAvailablePackageZodSchema)
+      .default([])
+      .optional(),
+
+    // ✅ Added
+    addOns: z.array(updateAddOnsZodSchema).default([]).optional(),
+  }),
+});
+
+const createJobValidation = {
+  createJobsZodSchema,
+  updateCreateJobsZodSchema,
+};
+
+export default createJobValidation;

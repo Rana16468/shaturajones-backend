@@ -24,6 +24,27 @@ const availablePackageSchema = new Schema(
   }
 );
 
+const addOnsSchema = new Schema(
+  {
+    jobName: {
+      type: String,
+      required: true,
+    },
+    price: {
+      type: Number,
+      required: true,
+    },
+
+    isDelete: {
+      type: Boolean,
+      default: false,
+    },
+  },
+  {
+    _id: true,
+  }
+);
+
 const createJobsSchema = new Schema<TCreateJobs, CreateJobsModel>(
   {
     jobName: {
@@ -53,6 +74,10 @@ const createJobsSchema = new Schema<TCreateJobs, CreateJobsModel>(
       type: [availablePackageSchema],
       default: [],
     },
+    addOns :{
+      type: [addOnsSchema],
+      default: [],
+    }
   },
   {
     timestamps: true,

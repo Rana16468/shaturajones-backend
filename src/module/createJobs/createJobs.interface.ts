@@ -5,6 +5,11 @@ export type AvailablePackages = {
     price: number,
     isDelete?: boolean
 }
+export type AddOns= {
+    jobName: string,
+    price: number,
+    isDelete?: boolean
+}
 export interface TCreateJobs {
 
     jobName: string,
@@ -13,6 +18,9 @@ export interface TCreateJobs {
     isDelete?: boolean;
     rating?: number
     availablePackages:AvailablePackages[]
+    addOns:AddOns[]
+   
+    
 }
 
 export interface CreateJobsModel extends Model<TCreateJobs> {
