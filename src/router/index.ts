@@ -10,6 +10,8 @@ import { PaymentGatewayRoutes } from '../module/payment_gateway/payment_gateway.
 import cleanerDistributionRouter from '../module/cleanerDistribusation/cleanerDistribusation.route';
 import WorkProgressRouter from '../module/workProgress/workProgress.route';
 import { RatingReviewRoutes } from '../module/ratingReview/ratingReview.route';
+import { conversationRoutes } from '../module/conversation/conversation.route';
+import messageRoutes from '../module/message/message.routes';
 
 const router = express.Router();
 const moduleRouter = [
@@ -24,6 +26,13 @@ const moduleRouter = [
   {path:"/distribution_jobs", route: cleanerDistributionRouter},
   {path:"/work_progress", route: WorkProgressRouter},
   {path:"/rating_review", route: RatingReviewRoutes},
+  
+   {
+    path:"/conversation", route:  conversationRoutes
+  },
+  {
+    path:"/message", route: messageRoutes
+  },
 ];
 
 moduleRouter.forEach((v) => router.use(v.path, v.route));

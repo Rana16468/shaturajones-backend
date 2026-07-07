@@ -10,23 +10,26 @@ const storage = multer.diskStorage({
   destination: (req, file, cb) => {
     let folderPath = './src/public';
 
-    if (file.mimetype.startsWith('image')) {
+    // ফাইল টাইপ চেক এবং আলাদা ফোল্ডার অ্যাসাইন করা
+    if (file.mimetype.startsWith('image/')) {
       folderPath = './src/public/images';
     } else if (file.mimetype === 'application/pdf') {
       folderPath = './src/public/pdf';
+    } else if (file.mimetype.startsWith('audio/')) {
+      folderPath = './src/public/audio'; // অডিও ফাইল এখানে যাবে
+    } else if (file.mimetype.startsWith('video/')) {
+      folderPath = './src/public/video'; // ভিডিও ফাইল এখানে যাবে
     } else {
       cb(
         new ApiError(
           status.BAD_REQUEST,
-          'Only images and PDFs are allowed',
+          'Only images, PDFs, audio, and video files are allowed',
           '',
         ),
         './src/public',
       );
       return;
     }
-
-    // Check if the folder exists, if not, create it
     if (!fs.existsSync(folderPath)) {
       fs.mkdirSync(folderPath, { recursive: true });
     }

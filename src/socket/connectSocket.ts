@@ -1,145 +1,119 @@
-import { Server as HTTPServer } from 'http';
-import { Server as ChatServer, Socket } from 'socket.io';
-import mongoose from 'mongoose';
-import { jwtHelpers } from '../app/helper/jwtHelpers';
-import config from '../app/config';
-import users from '../module/user/user.model';
+import { Server as HTTPServer } from "http";
+import { Server, Socket } from "socket.io";
+import mongoose from "mongoose";
+import { jwtHelpers } from "../app/helper/jwtHelpers";
+import config from "../app/config";
+import users from "../module/user/user.model";
+import handleChatEvents from "./handleChatEvents";
 
+let io: Server;
 
-let io: ChatServer;
+export const onlineUsers = new Map<string, string>();
 
-// socketId → userId mapping
-const onlineUsers = new Map<string, string>();
-
-const connectSocket = (server: HTTPServer) => {
+export const connectSocket = (server: HTTPServer) => {
   if (!io) {
-    io = new ChatServer(server, {
+    io = new Server(server, {
       cors: {
-        origin: '*',
-        methods: ['GET', 'POST'],
+        origin: "*",
+        methods: ["GET", "POST"],
       },
+      transports: ["websocket", "polling"],
       pingInterval: 25000,
       pingTimeout: 20000,
     });
   }
 
-  io.on('connection', async (socket: Socket) => {
-    console.log('🔌 Socket connected:', socket.id);
-
-    let currentUserId: string | null = null;
+  io.on("connection", async (socket: Socket) => {
+    console.log("Socket Connected:", socket.id);
 
     try {
+      const token = socket.handshake.auth?.token || socket.handshake.query?.token;
 
-      const token = String(socket.handshake.query.token || '').trim();
-
-      if (token) {
-
-        const decoded = await jwtHelpers.verifyToken(
-          token,
-          config.jwt_access_secret as string
-        );
-
-        const userId = decoded?.id;
-      
-          socket.join(userId);
-  
-
-        if (!userId || !mongoose.Types.ObjectId.isValid(userId)) {
-          socket.emit('error', { message: 'Invalid token userId' });
-          socket.disconnect();
-          return;
-        }
-
-        const currentUser = await users.findByIdAndUpdate(
-          userId,
-          {
-            isOnline: true,
-            updatedAt: new Date(),
-          },
-          { new: true }
-        );
-
-        if (!currentUser) {
-          socket.emit('error', { message: 'User not found' });
-          socket.disconnect();
-          return;
-        }
-
-        currentUserId = String(currentUser._id);
-
-        onlineUsers.set(currentUserId, socket.id);
-        socket.join(currentUserId);
-
-       
-
-        socket.emit('connected', {
-          success: true,
-          type: 'authenticated',
-          message: 'User connected successfully',
-          userId: currentUserId,
-          socketId: socket.id,
+      if (!token) {
+        socket.emit("socket-error", {
+          message: "Authentication token missing",
         });
 
-        socket.broadcast.emit('user-online', {
-          userId: currentUserId,
-        });
-      //    handleEvents(io, socket, currentUserId,currentUser.generate_secret_key , currentUser.role);
-
-        console.log('✅ Authenticated user connected:', currentUserId);
-      } else {
-
-
-        socket.emit('connected', {
-          success: true,
-          type: 'guest',
-          message: 'Guest connected (no authentication)',
-          socketId: socket.id,
-          userId: null,
-        });
-
-        console.log('👤 Guest connected:', socket.id);
+        return socket.disconnect(true);
       }
-    } catch (error) {
-      console.error('❌ Socket auth error:', error);
 
-      socket.emit('error', {
-        message: 'Authentication failed',
+      const decoded: any = await jwtHelpers.verifyToken(
+        String(token),
+        config.jwt_access_secret as string
+      );
+
+      if (!decoded?.id || !mongoose.Types.ObjectId.isValid(decoded.id)) {
+        socket.emit("socket-error", {
+          message: "Invalid Token",
+        });
+
+        return socket.disconnect(true);
+      }
+
+      const user = await users.findById(decoded.id);
+
+      if (!user) {
+        socket.emit("socket-error", {
+          message: "User not found",
+        });
+
+        return socket.disconnect(true);
+      }
+
+      const currentUserId = user._id.toString();
+
+      socket.data.userId = currentUserId;
+
+      onlineUsers.set(currentUserId, socket.id);
+
+      socket.join(currentUserId);
+
+      await users.findByIdAndUpdate(currentUserId, {
+        isOnline: true,
       });
 
-      socket.disconnect();
-      return;
-    }
+      socket.emit("connected", {
+        success: true,
+        userId: currentUserId,
+      });
 
-  
-    socket.on('disconnect', async (reason) => {
-      console.log('❌ Disconnected:', socket.id, reason);
+      socket.broadcast.emit("user-online", {
+        userId: currentUserId,
+      });
 
-      if (!currentUserId) return;
+      handleChatEvents(io, socket, currentUserId);
 
-      onlineUsers.delete(currentUserId);
+      socket.on("disconnect", async () => {
+        onlineUsers.delete(currentUserId);
 
-      try {
         await users.findByIdAndUpdate(currentUserId, {
           isOnline: false,
-          updatedAt: new Date(),
         });
 
-        socket.broadcast.emit('user-offline', {
+        socket.broadcast.emit("user-offline", {
           userId: currentUserId,
         });
-      } catch (err) {
-        console.error('❌ Error updating offline status:', err);
-      }
-    });
+
+        console.log("Disconnected:", currentUserId);
+      });
+    } catch (error) {
+      console.error(error);
+
+      socket.emit("socket-error", {
+        message: "Authentication Failed",
+      });
+
+      socket.disconnect(true);
+    }
   });
 
   return io;
 };
 
+export const getSocketIO = () => {
+  if (!io) {
+    throw new Error("Socket.IO is not initialized");
+  }
 
-const getSocketIO = () => {
-  if (!io) throw new Error('socket.io is not initialized');
   return io;
 };
-
-export { connectSocket, getSocketIO, onlineUsers };
