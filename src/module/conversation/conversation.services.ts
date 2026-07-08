@@ -100,7 +100,7 @@ const getSingleConversationListIntoDb = async (
     const baseQuery = conversations
       .find({
         participants: currentUserId,
-      })
+      }).sort({ updatedAt: -1 })
       .populate([
         {
           path: "participants",
