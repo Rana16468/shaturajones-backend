@@ -2,14 +2,9 @@
 
 import mongoose from 'mongoose';
 import users from '../user/user.model';
-
-
 import messages from '../message/message.model';
-
-import status from 'http-status';
 import conversations from './conversation.model';
 import QueryBuilder from '../../app/builder/QueryBuilder';
-import ApiError from '../../app/error/ApiError';
 import catchError from '../../app/error/catchError';
 
 
@@ -32,7 +27,7 @@ const getConversation = async (
       '_id',
     );
 
-    const matchingUserIds = matchingUsers.map((user) => user._id);
+    const matchingUserIds = matchingUsers?.map((user) => user._id);
     userSearchFilter = {
       participants: { $in: matchingUserIds },
     };
