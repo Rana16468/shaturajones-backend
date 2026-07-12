@@ -39,7 +39,14 @@ const getConversation = async (
     })
       .sort({ updatedAt: -1 })
       .populate({ path: 'participants', select: 'name photo _id email' })
-      .populate('lastMessage'),
+      .populate('lastMessage')
+      .populate({
+        path: 'serviceId',
+        populate: {
+          path: 'jobId',
+          select: 'jobName photo rating'
+        }
+      }),
     query,
   )
     .fields()
@@ -71,6 +78,7 @@ const getConversation = async (
         },
         unseenMsg: unseenCount,
         lastMsg: conv.lastMessage,
+        serviceId: conv.serviceId,
       };
     }),
   );
@@ -91,26 +99,47 @@ const getSingleConversationListIntoDb = async (
   query: Record<string, unknown>
 ) => {
   try {
-   
+    const profileObjectId = new mongoose.Types.ObjectId(currentUserId);
+
+    const searchTerm = query.searchTerm as string;
+    let userSearchFilter = {};
+
+    if (searchTerm) {
+      const matchingUsers = await users.find(
+        { name: { $regex: searchTerm, $options: 'i' } },
+        '_id',
+      );
+      const matchingUserIds = matchingUsers?.map((user) => user._id);
+      userSearchFilter = {
+        participants: { $in: matchingUserIds },
+      };
+    }
+
+    const { seen, ...safeQuery } = query as any;
+
     const baseQuery = conversations
       .find({
-        participants: currentUserId,
-      }).sort({ updatedAt: -1 })
+        participants: profileObjectId,
+        ...userSearchFilter,
+      })
+      .sort({ updatedAt: -1 })
       .populate([
         {
           path: "participants",
-          match: { _id: { $ne: currentUserId } },
-          select: "name photo email",
+          select: "name photo email _id",
         },
         {
           path: "lastMessage",
           select: "text createdAt seen",
         },
-      ])
-      .sort({ updatedAt: -1 });
-
-    
-    const { seen, ...safeQuery } = query as any;
+        {
+          path: "serviceId",
+          populate: {
+            path: "jobId",
+            select: "jobName photo rating"
+          }
+        }
+      ]);
 
     const conversationQuery = new QueryBuilder(baseQuery, safeQuery)
       .filter()
@@ -118,21 +147,40 @@ const getSingleConversationListIntoDb = async (
       .paginate()
       .fields();
 
-    let allConversations = await conversationQuery.modelQuery;
-   const meta = await conversationQuery.countTotal();
+    const allConversations = await conversationQuery.modelQuery;
+    const meta = await conversationQuery.countTotal();
 
+    // Normalize response to match the shape ChatConversation.fromJson expects
+    const conversationList = await Promise.all(
+      allConversations.map(async (conv: any) => {
+        const otherUser = conv.participants.find(
+          (user: any) => user._id.toString() !== currentUserId,
+        );
 
-  
+        const unseenCount = await messages.countDocuments({
+          conversationId: conv._id,
+          msgByUserId: { $ne: profileObjectId },
+          seen: false,
+        });
 
-   
-
-   
-
-    
+        return {
+          _id: conv._id,
+          userData: {
+            _id: otherUser?._id,
+            name: otherUser?.name,
+            profileImage: otherUser?.photo,
+            email: otherUser?.email,
+          },
+          unseenMsg: unseenCount,
+          lastMsg: conv.lastMessage,
+          serviceId: conv.serviceId,
+        };
+      }),
+    );
 
     return {
       meta,
-      allConversations
+      allConversations: conversationList,
     };
   } catch (error) {
     throw catchError(error);

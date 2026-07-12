@@ -16,7 +16,17 @@ import { USER_ACCESSIBILITY } from './user.constant';
 import emailContext from '../../utility/emailcontext/sendvarificationData';
 import { cache } from '../createJobs/createJobs.constant';
 
-
+const updateFcmTokenIntoDb = async (userId: string, fcmToken: string) => {
+  const result = await users.findByIdAndUpdate(
+    userId,
+    { $set: { fcmToken } },
+    { new: true, runValidators: true }
+  );
+  if (!result) {
+    throw new ApiError(httpStatus.NOT_FOUND, 'User not found', '');
+  }
+  return result;
+};
 
 
  const generateOTP = (): { otp: string; hash: string } => {
@@ -896,6 +906,7 @@ const UserServices = {
   userOverViewIntoDb,
   updateCareerOverviewIntoDb,
   buildCleanerProfileIntoDb,
-  toggleAvailabilityInDb
+  toggleAvailabilityInDb,
+  updateFcmTokenIntoDb
 };
 export default UserServices;

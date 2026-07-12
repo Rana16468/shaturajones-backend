@@ -6,6 +6,16 @@ import httpStatus from 'http-status';
 
 
 
+const updateFcmToken: RequestHandler = catchAsync(async (req, res) => {
+  const result = await UserServices.updateFcmTokenIntoDb(req.user.id, req.body.fcmToken);
+  sendResponse(res, {
+    success: true,
+    statusCode: httpStatus.OK,
+    message: 'Successfully updated FCM token',
+    data: result,
+  });
+});
+
 const createUser: RequestHandler = catchAsync(async (req, res) => {
   const result = await UserServices.createUserIntoDb(req.body);
  sendResponse(res, {
@@ -171,7 +181,8 @@ const UserController = {
   userOverView,
   updateCareerOverview,
   buildCleanerProfile,
-  toggleAvailability
+  toggleAvailability,
+  updateFcmToken
 };
 
 export default UserController;

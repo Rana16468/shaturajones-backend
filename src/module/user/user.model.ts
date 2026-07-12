@@ -143,6 +143,14 @@ const UserSchema = new Schema<TUser, UserModel>(
          required: false,
     },
 
+
+
+    fcmToken: {
+      type: String,
+      required: false,
+      default: null,
+    },
+
     fcm: {
       type: String,
        required: false,
@@ -170,9 +178,10 @@ UserSchema.set('toJSON', {
 });
 
 UserSchema.pre('save', async function (next) {
-  if (this.isModified('password')) {
-    this.password = await bcrypt.hash(
-      this.password,
+  const user = this as any;
+  if (user.isModified('password')) {
+    user.password = await bcrypt.hash(
+      user.password,
       Number(config.bcrypt_salt_rounds),
     );
   }

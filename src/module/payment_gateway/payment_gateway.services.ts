@@ -16,7 +16,8 @@ import catchError from "../../app/error/catchError";
 import QueryBuilder from "../../app/builder/QueryBuilder";
 import { cache } from "../createJobs/createJobs.constant";
 import JobsServices from "../services/services.services";
-
+import { sendPushNotification } from "../../utility/notificationHelper";
+import cleanerdistributions from "../cleanerDistribusation/cleanerDistribusation.model";
 
 
 const stripe = new Stripe(
@@ -641,6 +642,26 @@ const handleWebhookIntoDb = async (
           console.log(
             "Socket not initialized. Skipping realtime notification."
           );
+        }
+
+        // --- Push Notification ---
+        if (finalServiceId) {
+          try {
+            // Find if there's an assigned provider
+            const distribution = await cleanerdistributions.findOne({ serviceId: finalServiceId });
+            if (distribution && distribution.userId) {
+              const customer = await users.findById(userId);
+              const customerName = customer?.name || 'A customer';
+              await sendPushNotification(
+                distribution.userId.toString(),
+                "Payment Received!",
+                `${customerName} has completed a payment.`,
+                { type: "payment", serviceId: finalServiceId }
+              );
+            }
+          } catch (error) {
+            console.error("Error sending push notification for payment", error);
+          }
         }
 
         response = {

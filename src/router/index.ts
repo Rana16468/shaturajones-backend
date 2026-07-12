@@ -12,6 +12,7 @@ import WorkProgressRouter from '../module/workProgress/workProgress.route';
 import { RatingReviewRoutes } from '../module/ratingReview/ratingReview.route';
 import { conversationRoutes } from '../module/conversation/conversation.route';
 import messageRoutes from '../module/message/message.routes';
+import { CategoryRouter } from '../module/category/category.route';
 
 const router = express.Router();
 const moduleRouter = [
@@ -32,6 +33,9 @@ const moduleRouter = [
   },
   {
     path:"/message", route: messageRoutes
+  },
+  {
+    path: "/category", route: CategoryRouter
   },
 ];
 

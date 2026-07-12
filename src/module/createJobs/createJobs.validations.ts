@@ -72,6 +72,10 @@ const createJobsZodSchema = z.object({
       })
       .default(JobType.CLEANING),
 
+    category: z.string({
+      required_error: "category is required",
+    }),
+
     photo: z.string().optional(),
 
     isDelete: z.boolean().optional(),
@@ -100,6 +104,8 @@ const updateCreateJobsZodSchema = z.object({
       })
       .default(JobType.CLEANING)
       .optional(),
+
+    category: z.string().optional(),
 
     photo: z.string().optional(),
 

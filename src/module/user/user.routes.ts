@@ -11,6 +11,17 @@ import ApiError from '../../app/error/ApiError';
 
 const router = express.Router();
 
+router.patch(
+  "/fcm-token",
+  auth(
+    USER_ROLE.admin,
+    USER_ROLE.superAdmin,
+    USER_ROLE.cleaner,
+    USER_ROLE.customer
+  ),
+  UserController.updateFcmToken
+);
+
 router.post(
   "/create_user",
   validationRequest(UserValidationSchema.createUserZodSchema),

@@ -6,6 +6,7 @@ import services from "./services.model";
 import { TServices } from "./services.interface";
 import { cache } from "../createJobs/createJobs.constant";
 import QueryBuilder from "../../app/builder/QueryBuilder";
+import cleanerdistributions from "../cleanerDistribusation/cleanerDistribusation.model";
 
 
 const createNewJobsServicesIntoDb = async (
@@ -234,9 +235,22 @@ const findMyAllServicesIntoDb = async (
     const data = await servicesQuery.modelQuery;
     const meta = await servicesQuery.countTotal();
 
+    const dataWithCleaner = await Promise.all(
+      data.map(async (service: any) => {
+        const distribution = await cleanerdistributions
+          .findOne({ serviceId: service._id })
+          .populate("userId", "name photo email phoneNumber")
+          .lean();
+        if (distribution && distribution.userId) {
+          service.cleanerId = distribution.userId;
+        }
+        return service;
+      })
+    );
+
     const result = {
       meta,
-      data,
+      data: dataWithCleaner,
     };
 
     cache.set(cacheKey, result);
@@ -289,7 +303,7 @@ const findBySpecificServiceIntoDb = async (id: string) => {
     if (cachedService) {
       return cachedService;
     }
-    const service = await services.findById(id).populate("jobId").lean();
+    const service = await services.findById(id).populate("jobId").lean() as any;
 
     if (!service) {
       throw new ApiError(
@@ -297,6 +311,15 @@ const findBySpecificServiceIntoDb = async (id: string) => {
         "Service not found",
         ""
       );
+    }
+
+    const distribution = await cleanerdistributions
+      .findOne({ serviceId: id })
+      .populate("userId", "name photo email phoneNumber")
+      .lean();
+
+    if (distribution && distribution.userId) {
+      service.cleanerId = distribution.userId;
     }
 
     cache.set(cacheKey, service);

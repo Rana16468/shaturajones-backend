@@ -19,7 +19,6 @@ export const handleSingleSendMessage = async (
   const session = await mongoose.startSession();
 
   try {
- 
     if (!data.receiverId) {
       throw new Error("Receiver ID is required.");
     }
@@ -40,16 +39,13 @@ export const handleSingleSendMessage = async (
       throw new Error("Receiver not found.");
     }
 
+    // Find existing conversation between these two users (ignore serviceId)
     const conversationFilter: any = {
       participants: {
         $all: [currentUserId, data.receiverId],
         $size: 2,
       },
     };
-
-    if (data.serviceId) {
-      conversationFilter.serviceId = data.serviceId;
-    }
 
     let conversation = await conversations
       .findOne(conversationFilter)
@@ -73,6 +69,7 @@ export const handleSingleSendMessage = async (
       conversation = createdConversation[0];
       isNewConversation = true;
     }
+
     const createdMessage = await messages.create(
       [
         {
@@ -102,15 +99,36 @@ export const handleSingleSendMessage = async (
 
     await session.commitTransaction();
 
+    // Build a clean message payload with all IDs as strings
+    // so socket.io serialization doesn't mangle ObjectIds
+    const msgObj = savedMessage.toObject() as any;
+    const messagePayload = {
+      _id: savedMessage._id.toString(),
+      text: savedMessage.text,
+      msgByUserId: currentUserId,
+      conversationId: conversation._id.toString(),
+      seen: savedMessage.seen ?? false,
+      createdAt: msgObj.createdAt,
+      updatedAt: msgObj.updatedAt,
+    };
+
     const roomId = conversation._id.toString();
 
-    socket.join(roomId);
+    // Ensure sender socket is in the room
+    await socket.join(roomId);
     socket.data.currentConversationId = roomId;
 
-    // Emit message
-    io.to(roomId).emit("new-message", savedMessage);
+    // Emit new-message ONLY to the conversation room
+    // (sender is in the room so they get their own echo)
+    io.to(roomId).emit("new-message", messagePayload);
 
-    // Seen logic
+    // For the receiver — emit a lightweight event to their personal room
+    // so their conversation list refreshes (but NOT new-message to avoid duplicates)
+    io.to(data.receiverId).emit("conversation-updated", {
+      conversationId: roomId,
+    });
+
+    // Seen logic — check if receiver is currently viewing this conversation
     const room = io.sockets.adapter.rooms.get(roomId);
 
     if (room) {
@@ -137,21 +155,22 @@ export const handleSingleSendMessage = async (
         });
 
         io.to(roomId).emit("messages-seen", {
-          conversationId: conversation._id,
+          conversationId: roomId,
           seenBy: data.receiverId,
-          messageIds: [savedMessage._id],
+          messageIds: [savedMessage._id.toString()],
         });
       }
     }
+
     if (isNewConversation) {
       io.to(data.receiverId).emit("conversation-created", {
-        conversationId: conversation._id,
-        lastMessage: savedMessage,
+        conversationId: roomId,
+        lastMessage: messagePayload,
       });
 
       socket.emit("conversation-created", {
-        conversationId: conversation._id,
-        lastMessage: savedMessage,
+        conversationId: roomId,
+        lastMessage: messagePayload,
       });
     }
   } catch (error: any) {

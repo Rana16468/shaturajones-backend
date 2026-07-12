@@ -14,7 +14,7 @@ export type TUser = {
   name: string;
   password: string;
   email: string;
-  location?: string;
+  location: string;
   verificationCode: string;
   isVerify: boolean;
   status: 'isProgress' | 'Blocked';
@@ -30,6 +30,7 @@ export type TUser = {
   stripeAccountId?: string;
   isStripeConnected?: boolean;
   fcm?:string;
+  fcmToken?: string;
   isAvailable?: boolean;
   isDelete: boolean;
 };

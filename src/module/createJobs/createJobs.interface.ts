@@ -15,8 +15,9 @@ export interface TCreateJobs {
     jobName: string,
     photo: string,
     jobType: "CLEANING"
+    category: string;
     isDelete?: boolean;
-    rating?: number
+    rating?: number;
     availablePackages:AvailablePackages[]
     addOns:AddOns[]
    

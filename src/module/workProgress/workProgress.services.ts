@@ -7,6 +7,10 @@ import workprogress from "./workProgress.model";
 import mongoose from "mongoose";
 import { USER_ROLE } from "../user/user.constant";
 import { cache } from "../createJobs/createJobs.constant";
+import { getSocketIO } from "../../socket/connectSocket";
+import notifications from "../notification/notification.model";
+import { sendPushNotification } from "../../utility/notificationHelper";
+import users from "../user/user.model";
 
 
 const beforeWorkingIntoDb = async (
@@ -199,6 +203,16 @@ const afterWorkingIntoDb = async (
 
     await session.commitTransaction();
     session.endSession();
+
+    // --- Push Notification ---
+    const provider = await users.findById(userId);
+    const providerName = provider?.name || 'A cleaner';
+    await sendPushNotification(
+      isServiceEnded.userId.toString(),
+      "Job Completed!",
+      `${providerName} has marked your job as completed.`,
+      { type: "service", serviceId: updatedService._id.toString() }
+    );
 
     return {
       success: true,

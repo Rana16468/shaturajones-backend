@@ -57,6 +57,10 @@ const createJobsSchema = new Schema<TCreateJobs, CreateJobsModel>(
       required: false,
       default: JobType.CLEANING 
     },
+    category: {
+      type: String,
+      required: true,
+    },
     isDelete: {
       type: Boolean,
       default: false,

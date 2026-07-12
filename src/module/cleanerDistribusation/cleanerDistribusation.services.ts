@@ -11,6 +11,8 @@ import payments from "../payment_gateway/payment_gateway.model";
 import { payment_status } from "../payment_gateway/payment_gateway.constant";
 import mongoose from "mongoose";
 import QueryBuilder from "../../app/builder/QueryBuilder";
+import { sendPushNotification } from "../../utility/notificationHelper";
+import users from "../user/user.model";
 
 const isAcceptedJobOfferIntoDb = async (
     userId: string,
@@ -82,6 +84,16 @@ const isAcceptedJobOfferIntoDb = async (
         } catch {
             console.log("Socket not initialized.");
         }
+
+        // --- Push Notification ---
+        const provider = await users.findById(userId);
+        const providerName = provider?.name || 'A cleaner';
+        await sendPushNotification(
+            acceptedService.userId.toString(),
+            "Job Accepted!",
+            `${providerName} has accepted your service request.`,
+            { type: "service", serviceId: acceptedService._id.toString() }
+        );
 
         cache.flushAll();
 
