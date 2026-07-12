@@ -56,6 +56,12 @@ router.post(
   PaymentGatewayController.handleWebhook,
 );
 
+router.post(
+  '/confirm-booking-payment',
+  auth(USER_ROLE.customer),
+  PaymentGatewayController.confirmBookingPayment,
+);
+
 router.get("/find_by_all_payment",
    auth(USER_ROLE.admin),
     PaymentGatewayController.findByAllPayment)

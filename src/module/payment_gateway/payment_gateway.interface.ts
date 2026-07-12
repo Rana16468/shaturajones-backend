@@ -4,7 +4,7 @@ import { Model, Types } from "mongoose";
 
 export interface TStripePaymentGateWay {
   userId: Types.ObjectId;
-  serviceId: Types.ObjectId;
+  serviceId?: Types.ObjectId;
   price: Number;
   description?: String;
   currency?: String;

@@ -17,7 +17,7 @@ const TStripePaymentGateWaySchema = new Schema<
     serviceId: {
       type: Schema.Types.ObjectId,
       ref: "services",
-      required: [true, "services is required"],
+      required: [false, "services is required"],
     },
     price: {
       type: Number,

@@ -89,12 +89,12 @@ const getPaymentStatus = catchAsync(async (req: Request, res: Response) => {
 const createCheckoutSession = catchAsync(
   async (req: Request, res: Response) => {
     const userId = req.user.id;
-    const { price, serviceId, description } = req.body;
+    const { price, serviceId, bookingData, description } = req.body;
 
     const result =
       await PaymentGatewayServices.createCheckoutSessionForSubscription(
         userId,
-        { price, serviceId, description },
+        { price, serviceId, bookingData, description },
       );
 
     sendResponse(res, {
@@ -173,6 +173,21 @@ const findByAllPayment:RequestHandler=catchAsync(async(req , res)=>{
 
 
 
+const confirmBookingPayment = catchAsync(
+  async (req: Request, res: Response) => {
+    const { sessionId } = req.body;
+
+    const result = await PaymentGatewayServices.confirmBookingPaymentIntoDb(sessionId);
+
+    sendResponse(res, {
+      statusCode: httpStatus.OK,
+      success: true,
+      message: 'Booking and payment confirmed successfully',
+      data: result,
+    });
+  },
+);
+
 const PaymentGatewayController = {
   createConnectedAccountAndOnboardingLink,
   refreshOnboardingLink,
@@ -180,7 +195,8 @@ const PaymentGatewayController = {
   getPaymentStatus,
   createCheckoutSession,
   handleWebhook,
-  findByAllPayment
+  findByAllPayment,
+  confirmBookingPayment
 };
 
 export default PaymentGatewayController;

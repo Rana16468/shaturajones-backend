@@ -124,6 +124,12 @@ const UserSchema = new Schema<TUser, UserModel>(
       default: false,
     },
 
+    isAvailable: {
+      type: Boolean,
+      default: true,
+      required: false,
+    },
+
     stripeAccountId: {
       type: String,
       required: false,

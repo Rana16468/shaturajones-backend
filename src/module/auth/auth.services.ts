@@ -168,7 +168,7 @@ const myProfileIntoDb = async (id: string) => {
   try {
     const profile = await users
       .findById(id)
-      .select("name country photo dateOfBirth phoneNumber createdAt updatedAt ");
+      .select("name country photo dateOfBirth phoneNumber createdAt updatedAt isAvailable skills cleaningExperience isValidate");
 
     if (!profile) {
       throw new ApiError(httpStatus.NOT_FOUND, "User not found", "");

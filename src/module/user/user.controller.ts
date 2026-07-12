@@ -148,19 +148,30 @@ const buildCleanerProfile: RequestHandler=catchAsync(async(req , res)=>{
   });
 })
 
+const toggleAvailability: RequestHandler = catchAsync(async (req, res) => {
+  const result = await UserServices.toggleAvailabilityInDb(req.user.id, req.body.isAvailable);
+  sendResponse(res, {
+    success: true,
+    statusCode: httpStatus.OK,
+    message: "Availability toggled successfully",
+    data: result,
+  });
+});
+
 const UserController = {
   createUser,
   userVerification,
-   changePassword,
-   forgotPassword,
-   verificationForgotUser,
-   resetPassword,
-   getUserGrowth,
-   resendVerificationOtp,
+  changePassword,
+  forgotPassword,
+  verificationForgotUser,
+  resetPassword,
+  getUserGrowth,
+  resendVerificationOtp,
   createAdminAccount,
   userOverView,
-   updateCareerOverview,
-   buildCleanerProfile
+  updateCareerOverview,
+  buildCleanerProfile,
+  toggleAvailability
 };
 
 export default UserController;

@@ -832,6 +832,8 @@ const buildCleanerProfileIntoDb = async (userId: string, payload: any) => {
     updateData.skills =
       payload.skills?.map((s: string) => s.trim()) || [];
 
+    updateData.isValidate = true;
+
     const result = await users.findByIdAndUpdate(
       userId,
       { $set: updateData },
@@ -859,7 +861,27 @@ const buildCleanerProfileIntoDb = async (userId: string, payload: any) => {
   }
 };
 
+const toggleAvailabilityInDb = async (userId: string, isAvailable: boolean) => {
+  try {
+    if (!userId) {
+      throw new ApiError(httpStatus.BAD_REQUEST, "Invalid user ID", "");
+    }
 
+    const result = await users.findByIdAndUpdate(
+      userId,
+      { $set: { isAvailable } },
+      { new: true, runValidators: true }
+    );
+
+    if (!result) {
+      throw new ApiError(httpStatus.NOT_FOUND, "User not found", "");
+    }
+
+    return result;
+  } catch (error) {
+    throw catchError(error);
+  }
+};
 
 const UserServices = {
   createUserIntoDb,
@@ -873,11 +895,7 @@ const UserServices = {
   createAdminAccountIntoDb,
   userOverViewIntoDb,
   updateCareerOverviewIntoDb,
-  buildCleanerProfileIntoDb
-
-
-
-
-
+  buildCleanerProfileIntoDb,
+  toggleAvailabilityInDb
 };
 export default UserServices;

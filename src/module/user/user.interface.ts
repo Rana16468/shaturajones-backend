@@ -30,6 +30,7 @@ export type TUser = {
   stripeAccountId?: string;
   isStripeConnected?: boolean;
   fcm?:string;
+  isAvailable?: boolean;
   isDelete: boolean;
 };
 

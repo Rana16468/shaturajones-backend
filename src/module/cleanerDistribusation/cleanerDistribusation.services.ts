@@ -240,6 +240,39 @@ const findByAllServicesIntoDb = async (
         },
       },
 
+      // Lookup job details from createjobs collection
+      {
+        $lookup: {
+          from: "createjobs",
+          localField: "service.jobId",
+          foreignField: "_id",
+          as: "job",
+        },
+      },
+      {
+        $unwind: {
+          path: "$job",
+          preserveNullAndEmptyArrays: true,
+        },
+      },
+
+      // Add job info into service
+      {
+        $addFields: {
+          "service.jobId": {
+            _id: "$job._id",
+            jobName: "$job.jobName",
+            jobType: "$job.jobType",
+            photo: "$job.photo",
+          },
+        },
+      },
+      {
+        $project: {
+          job: 0,
+        },
+      },
+
       {
         $facet: {
           meta: [
@@ -410,11 +443,17 @@ const findMyAcceptedJobListIntoDb = async (
               isDelete: false,
             },
             select:
-              "addJobsPackages jobId selectedDate isAccepted isServiceStarted isServiceEed isAdvancePayment isCompletePayment totalAmount",
-            populate: {
-              path: "jobId",
-              select: "title category address",
-            },
+              "addJobsPackages jobId selectedDate isAccepted isServiceStarted isServiceEed isAdvancePayment isCompletePayment totalAmount userId",
+            populate: [
+              {
+                path: "jobId",
+                select: "jobName jobType photo",
+              },
+              {
+                path: "userId",
+                select: "name photo email",
+              },
+            ],
           },
         ])
         .lean(),

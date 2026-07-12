@@ -11,7 +11,7 @@ import QueryBuilder from "../../app/builder/QueryBuilder";
 const createNewJobsServicesIntoDb = async (
   userId: string,
   payload: TServices
-): Promise<{ success: boolean; message: string }> => {
+): Promise<any> => {
   try {
     const {
       jobId,
@@ -35,10 +35,11 @@ const createNewJobsServicesIntoDb = async (
     });
 
     if (isServiceExist) {
-      return {
-        success: false,
-        message: "Service already exists for this job",
-      };
+      throw new ApiError(
+        httpStatus.BAD_REQUEST,
+        "Service already exists for this job",
+        ""
+      );
     }
 
     /**
@@ -158,10 +159,7 @@ const createNewJobsServicesIntoDb = async (
       );
     }
 
-    return {
-      success: true,
-      message: `Service created successfully. Total Amount: ${totalAmount}`,
-    };
+    return newService;
   } catch (error) {
     throw catchError(error);
   }
@@ -223,9 +221,7 @@ const findMyAllServicesIntoDb = async (
     const servicesQuery = new QueryBuilder(
       services
         .find(baseFilter)
-        .select(
-          "-jobId -userId -selectedDate -isAdvancePayment -isCompletePayment"
-        )
+        .populate("jobId")
         .lean(),
       modifiedQuery
     )
@@ -293,7 +289,7 @@ const findBySpecificServiceIntoDb = async (id: string) => {
     if (cachedService) {
       return cachedService;
     }
-    const service = await services.findById(id).lean();
+    const service = await services.findById(id).populate("jobId").lean();
 
     if (!service) {
       throw new ApiError(

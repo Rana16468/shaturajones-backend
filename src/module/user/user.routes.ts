@@ -191,8 +191,11 @@ router.patch(
   UserController.buildCleanerProfile
 );
 
-
-
+router.post(
+  "/toggle_availability",
+  auth(USER_ROLE.cleaner),
+  UserController.toggleAvailability
+);
 
 const UserRouters = router;
 export default UserRouters;

@@ -31,12 +31,32 @@ const createCheckoutSession = z.object({
         invalid_type_error: 'Price must be a number',
       })
       .positive('Price must be positive'),
-      serviceId: z
-      .string({
-        required_error: 'SubscriptionId is required',
+    serviceId: z
+      .string()
+      .regex(/^[0-9a-fA-F]{24}$/, 'Invalid truck ID format')
+      .optional(),
+    bookingData: z
+      .object({
+        jobId: z.string({ required_error: 'Job ID is required in bookingData' }),
+        selectedDate: z.string({ required_error: 'Selected Date is required in bookingData' }),
+        availablePackagesService: z
+          .array(
+            z.object({
+              availablePackageId: z.string(),
+              isDelete: z.boolean().optional(),
+            })
+          )
+          .optional(),
+        addOnsService: z
+          .array(
+            z.object({
+              addOnsId: z.string(),
+              isDelete: z.boolean().optional(),
+            })
+          )
+          .optional(),
       })
-      .regex(/^[0-9a-fA-F]{24}$/, 'Invalid truck ID format'),
-    
+      .optional(),
     description: z.string().optional(),
   }),
 });

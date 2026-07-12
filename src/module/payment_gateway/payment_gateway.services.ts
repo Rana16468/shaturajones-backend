@@ -15,6 +15,7 @@ import notifications from "../notification/notification.model";
 import catchError from "../../app/error/catchError";
 import QueryBuilder from "../../app/builder/QueryBuilder";
 import { cache } from "../createJobs/createJobs.constant";
+import JobsServices from "../services/services.services";
 
 
 
@@ -26,7 +27,13 @@ const stripe = new Stripe(
 
 interface PaymentDetails {
   price: number;
-  serviceId: string;
+  serviceId?: string;
+  bookingData?: {
+    jobId: string;
+    selectedDate: string;
+    availablePackagesService?: Array<{ availablePackageId: string; isDelete?: boolean }>;
+    addOnsService?: Array<{ addOnsId: string; isDelete?: boolean }>;
+  };
   description?: string;
 }
 
@@ -343,15 +350,48 @@ const createCheckoutSessionForSubscription = async (
       );
     }
 
-    const existingServices = await services
-      .exists({
-          _id: serviceId
+    let existingServiceId: string | undefined = undefined;
+    let metadata: Record<string, string> = {
+      userId,
+    };
 
-      })
-      .session(session);
+    if (serviceId) {
+      if (!Types.ObjectId.isValid(serviceId)) {
+        throw new ApiError(httpStatus.BAD_REQUEST, "Invalid serviceId", "");
+      }
+      const existingServices = await services
+        .exists({ _id: serviceId })
+        .session(session);
 
-    if (!existingServices) {
-      throw new ApiError(httpStatus.NOT_FOUND, "Service not found", "");
+      if (!existingServices) {
+        throw new ApiError(httpStatus.NOT_FOUND, "Service not found", "");
+      }
+      existingServiceId = serviceId;
+      metadata.serviceId = serviceId;
+    } else if (paymentDetails.bookingData) {
+      const { jobId, selectedDate, availablePackagesService, addOnsService } = paymentDetails.bookingData;
+      if (!jobId || !Types.ObjectId.isValid(jobId)) {
+        throw new ApiError(httpStatus.BAD_REQUEST, "Valid jobId is required in bookingData", "");
+      }
+      if (!selectedDate) {
+        throw new ApiError(httpStatus.BAD_REQUEST, "selectedDate is required in bookingData", "");
+      }
+
+      metadata.jobId = jobId;
+      metadata.selectedDate = selectedDate;
+      
+      if (availablePackagesService && availablePackagesService.length > 0) {
+        metadata.packages = availablePackagesService.map(p => p.availablePackageId).join(',');
+      }
+      if (addOnsService && addOnsService.length > 0) {
+        metadata.addons = addOnsService.map(a => a.addOnsId).join(',');
+      }
+    } else {
+      throw new ApiError(
+        httpStatus.BAD_REQUEST,
+        "Either serviceId or bookingData must be provided",
+        ""
+      );
     }
 
     const stripeSession = await stripe.checkout.sessions.create({
@@ -370,10 +410,7 @@ const createCheckoutSessionForSubscription = async (
           quantity: 1,
         },
       ],
-      metadata: {
-        serviceId,
-        userId,
-      },
+      metadata,
       mode: "payment",
       success_url: `${config.stripe_payment_gateway.checkout_success_url}?sessionId={CHECKOUT_SESSION_ID}`,
       cancel_url: config.stripe_payment_gateway.checkout_cancel_url,
@@ -383,8 +420,8 @@ const createCheckoutSessionForSubscription = async (
     const payment = new payments({
       currency: stripeSession.currency,
       sessionId: stripeSession.id,
-     userId,
-      serviceId: existingServices._id,
+      userId,
+      serviceId: existingServiceId ? new Types.ObjectId(existingServiceId) : undefined,
       payment_method: stripeSession.payment_method_types[0],
       payment_status: stripeSession.payment_status,
       price,
@@ -480,11 +517,69 @@ const handleWebhookIntoDb = async (
 
         const userId = sessionData.metadata?.userId;
         const serviceId = sessionData.metadata?.serviceId;
+        const jobId = sessionData.metadata?.jobId;
 
-        if (!userId || !serviceId) {
+        if (!userId) {
           throw new ApiError(
             httpStatus.BAD_REQUEST,
-            "Missing metadata",
+            "Missing userId in metadata",
+            ""
+          );
+        }
+
+        let finalServiceId = serviceId;
+
+        if (!serviceId && jobId) {
+          const selectedDate = sessionData.metadata?.selectedDate;
+          const packagesStr = sessionData.metadata?.packages;
+          const addonsStr = sessionData.metadata?.addons;
+
+          const availablePackagesService = packagesStr 
+            ? packagesStr.split(',').map((id: string) => ({ availablePackageId: id, isDelete: false })) 
+            : [];
+          const addOnsService = addonsStr 
+            ? addonsStr.split(',').map((id: string) => ({ addOnsId: id, isDelete: false })) 
+            : [];
+
+          const newService = await JobsServices.createNewJobsServicesIntoDb(userId, {
+            jobId,
+            selectedDate: new Date(selectedDate),
+            availablePackagesService,
+            addOnsService,
+            isAdvancePayment: true,
+            isCompletePayment: false,
+            isAccepted: false,
+            isServiceStarted: false,
+            isServiceEed: false,
+            isDelete: false
+          } as any);
+
+          finalServiceId = newService._id.toString();
+        } else if (serviceId) {
+          const service = await services
+            .findById(serviceId)
+            .session(session);
+
+          if (!service) {
+            throw new ApiError(
+              httpStatus.NOT_FOUND,
+              "Service not found",
+              ""
+            );
+          }
+
+          if (!service.isAdvancePayment) {
+            service.isAdvancePayment = true;
+            service.isCompletePayment = false;
+          } else if (!service.isCompletePayment) {
+            service.isCompletePayment = true;
+          }
+
+          await service.save({ session });
+        } else {
+          throw new ApiError(
+            httpStatus.BAD_REQUEST,
+            "Missing serviceId or jobId in metadata",
             ""
           );
         }
@@ -496,7 +591,7 @@ const handleWebhookIntoDb = async (
           {
             $set: {
               userId,
-              serviceId,
+              serviceId: finalServiceId ? new Types.ObjectId(finalServiceId) : undefined,
               sessionId: sessionData.id,
               price: (sessionData.amount_total ?? 0) / 100,
               currency: sessionData.currency ?? "usd",
@@ -518,37 +613,13 @@ const handleWebhookIntoDb = async (
           }
         );
 
-        const service = await services
-          .findById(serviceId)
-          .session(session);
-
-        if (!service) {
-          throw new ApiError(
-            httpStatus.NOT_FOUND,
-            "Service not found",
-            ""
-          );
-        }
-
-        if (!service.isAdvancePayment) {
-          service.isAdvancePayment = true;
-          service.isCompletePayment = false;
-        }
-
-       
-        else if (!service.isCompletePayment) {
-          service.isCompletePayment = true;
-        }
-
-        await service.save({ session });
-
         const notification = new notifications({
           userId,
           title: "Payment Successful",
           message:
             "Your payment has been completed successfully.",
           isRead: false,
-          route: `/notification/${serviceId}`,
+          route: `/notification/${finalServiceId}`,
         });
 
         await notification.save({ session });
@@ -597,6 +668,9 @@ const handleWebhookIntoDb = async (
     }
 
     await session.commitTransaction();
+
+    // Flush cache so cleaner open jobs list refreshes immediately
+    cache.flushAll();
 
     return response;
   } catch (error: any) {
@@ -665,6 +739,158 @@ const findByAllPaymentIntoDb = async (
 
 
 
+const confirmBookingPaymentIntoDb = async (sessionId: string) => {
+  const stripeSession = await stripe.checkout.sessions.retrieve(sessionId);
+
+  if (stripeSession.payment_status !== "paid") {
+    throw new ApiError(
+      httpStatus.BAD_REQUEST,
+      "Payment not completed yet on Stripe",
+      ""
+    );
+  }
+
+  const userId = stripeSession.metadata?.userId;
+  const serviceId = stripeSession.metadata?.serviceId;
+  const jobId = stripeSession.metadata?.jobId;
+
+  if (!userId) {
+    throw new ApiError(
+      httpStatus.BAD_REQUEST,
+      "Missing userId in Stripe session metadata",
+      ""
+    );
+  }
+
+  const session = await mongoose.startSession();
+  try {
+    session.startTransaction();
+
+    let finalServiceId = serviceId;
+
+    if (!serviceId && jobId) {
+      const existingService = await services.findOne({
+        jobId,
+        userId,
+        isDelete: { $ne: true }
+      }).session(session);
+
+      if (existingService) {
+        finalServiceId = existingService._id.toString();
+      } else {
+        const selectedDate = stripeSession.metadata?.selectedDate;
+        const packagesStr = stripeSession.metadata?.packages;
+        const addonsStr = stripeSession.metadata?.addons;
+
+        const availablePackagesService = packagesStr 
+          ? packagesStr.split(',').map((id: string) => ({ availablePackageId: id, isDelete: false })) 
+          : [];
+        const addOnsService = addonsStr 
+          ? addonsStr.split(',').map((id: string) => ({ addOnsId: id, isDelete: false })) 
+          : [];
+
+        const newService = await JobsServices.createNewJobsServicesIntoDb(userId, {
+          jobId,
+          selectedDate: new Date(selectedDate!),
+          availablePackagesService,
+          addOnsService,
+          isAdvancePayment: true,
+          isCompletePayment: false,
+          isAccepted: false,
+          isServiceStarted: false,
+          isServiceEed: false,
+          isDelete: false
+        } as any);
+
+        finalServiceId = newService._id.toString();
+      }
+    } else if (serviceId) {
+      const service = await services
+        .findById(serviceId)
+        .session(session);
+
+      if (!service) {
+        throw new ApiError(
+          httpStatus.NOT_FOUND,
+          "Service not found",
+          ""
+        );
+      }
+
+      if (!service.isAdvancePayment) {
+        service.isAdvancePayment = true;
+        service.isCompletePayment = false;
+      } else if (!service.isCompletePayment) {
+        service.isCompletePayment = true;
+      }
+
+      await service.save({ session });
+    }
+
+    await payments.updateOne(
+      {
+        sessionId: stripeSession.id,
+      },
+      {
+        $set: {
+          userId,
+          serviceId: finalServiceId ? new Types.ObjectId(finalServiceId) : undefined,
+          sessionId: stripeSession.id,
+          price: (stripeSession.amount_total ?? 0) / 100,
+          currency: stripeSession.currency ?? "usd",
+          paymentmethod: payment_method.card,
+          payment_status: payment_status.paid,
+          payable_name:
+            stripeSession.customer_details?.name ?? "",
+          payable_email:
+            stripeSession.customer_details?.email ?? "",
+          payment_intent:
+            stripeSession.payment_intent as string,
+          country:
+            stripeSession.customer_details?.address?.country ?? "",
+        },
+      },
+      {
+        upsert: true,
+        session,
+      }
+    );
+
+    const existingNotification = await notifications.findOne({
+      userId,
+      route: `/notification/${finalServiceId}`
+    }).session(session);
+
+    if (!existingNotification) {
+      const notification = new notifications({
+        userId,
+        title: "Payment Successful",
+        message: "Your payment has been completed successfully.",
+        isRead: false,
+        route: `/notification/${finalServiceId}`,
+      });
+      await notification.save({ session });
+    }
+
+    await session.commitTransaction();
+
+    // Flush cache so cleaner open jobs list refreshes immediately
+    cache.flushAll();
+
+    return {
+      success: true,
+      serviceId: finalServiceId,
+      message: "Booking and payment confirmed successfully"
+    };
+
+  } catch (error: any) {
+    await session.abortTransaction();
+    throw error;
+  } finally {
+    session.endSession();
+  }
+};
+
 const PaymentGatewayServices = {
   createConnectedAccountAndOnboardingLinkIntoDb,
   updateOnboardingLinkIntoDb,
@@ -672,7 +898,8 @@ const PaymentGatewayServices = {
   retrievePaymentStatus,
   createCheckoutSessionForSubscription,
   handleWebhookIntoDb,
-  findByAllPaymentIntoDb
+  findByAllPaymentIntoDb,
+  confirmBookingPaymentIntoDb
 };
 
 export default PaymentGatewayServices;
