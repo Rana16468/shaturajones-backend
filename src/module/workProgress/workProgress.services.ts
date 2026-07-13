@@ -179,11 +179,10 @@ const afterWorkingIntoDb = async (
         isAccepted: true,
         isServiceStarted: true,
         isServiceEed: false,
-        isCompletePayment: false,
       },
       {
         $set: {
-          isServiceEed: true,
+          isCompletionRequested: true,
         },
       },
       {

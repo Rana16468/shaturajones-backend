@@ -127,6 +127,22 @@ const ServicesSchema = new Schema<TServices, ServicesModel>(
       index: true,
       default: false,
     },
+
+    isCompletionRequested: {
+      type: Boolean,
+      default: false,
+    },
+
+    isExtensionRequested: {
+      type: Boolean,
+      default: false,
+    },
+
+    extensionDuration: {
+      type: String,
+      default: "",
+    },
+
     totalAmount:{
 
         type: Number,

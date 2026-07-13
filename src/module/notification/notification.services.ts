@@ -34,14 +34,49 @@ const findByAllUsersNotificationIntoDb = async (query: Record<string, unknown>, 
   }
 };
 
+const markAsReadIntoDb = async (id: string, userId: string) => {
+  try {
+    const result = await notifications.findOneAndUpdate(
+      { _id: id, userId },
+      { $set: { isRead: true } },
+      { new: true }
+    );
+    return result;
+  } catch (error) {
+    catchError(error);
+  }
+};
 
+const markAllAsReadIntoDb = async (userId: string) => {
+  try {
+    const result = await notifications.updateMany(
+      { userId, isRead: false },
+      { $set: { isRead: true } }
+    );
+    return result;
+  } catch (error) {
+    catchError(error);
+  }
+};
 
-
-
+const deleteNotificationFromDb = async (id: string, userId: string) => {
+  try {
+    const result = await notifications.findOneAndUpdate(
+      { _id: id, userId },
+      { $set: { isDelete: true } },
+      { new: true }
+    );
+    return result;
+  } catch (error) {
+    catchError(error);
+  }
+};
 
 const notificationServices={
-    findByAllUsersNotificationIntoDb
- 
+    findByAllUsersNotificationIntoDb,
+    markAsReadIntoDb,
+    markAllAsReadIntoDb,
+    deleteNotificationFromDb
 };
 
 export default notificationServices;

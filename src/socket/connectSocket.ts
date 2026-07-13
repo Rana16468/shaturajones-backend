@@ -67,6 +67,8 @@ export const connectSocket = (server: HTTPServer) => {
       onlineUsers.set(currentUserId, socket.id);
 
       socket.join(currentUserId);
+      socket.join(`user::${currentUserId}`);
+      socket.join(`user::${user.role}`);
 
       await users.findByIdAndUpdate(currentUserId, {
         isOnline: true,

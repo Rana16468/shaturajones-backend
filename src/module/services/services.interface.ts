@@ -29,6 +29,9 @@ export interface TServices {
     isServiceEed: boolean;
     isAdvancePayment: boolean;
     isCompletePayment: boolean;
+    isCompletionRequested?: boolean;
+    isExtensionRequested?: boolean;
+    extensionDuration?: string;
     totalAmount: number;
     isDelete: boolean;
 }

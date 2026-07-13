@@ -330,14 +330,116 @@ const findBySpecificServiceIntoDb = async (id: string) => {
   }
 };
 
+const extendDeadlineIntoDb = async (
+  payload: { serviceId: string; extensionDuration: string },
+  userId: string
+) => {
+  try {
+    const service = await services.findById(payload.serviceId);
+    if (!service) {
+      throw new ApiError(httpStatus.NOT_FOUND, "Service not found", "");
+    }
+    
+    // Set extension properties
+    service.isExtensionRequested = true;
+    service.extensionDuration = payload.extensionDuration;
+    await service.save();
 
+    return service;
+  } catch (error) {
+    throw catchError(error);
+  }
+};
+
+const acceptExtensionIntoDb = async (
+  serviceId: string,
+  accept: boolean,
+  userId: string
+) => {
+  try {
+    const service = await services.findById(serviceId);
+    if (!service) {
+      throw new ApiError(httpStatus.NOT_FOUND, "Service not found", "");
+    }
+
+    if (accept) {
+      let hoursToAdd = 0;
+      if (service.extensionDuration) {
+        const duration = service.extensionDuration.toLowerCase();
+        if (duration.includes("1 hour")) hoursToAdd = 1;
+        else if (duration.includes("2 hours")) hoursToAdd = 2;
+        else if (duration.includes("4 hours")) hoursToAdd = 4;
+        else if (duration.includes("1 day")) hoursToAdd = 24;
+        else if (duration.includes("2 days")) hoursToAdd = 48;
+      }
+
+      if (hoursToAdd > 0 && service.selectedDate) {
+        const currentDt = new Date(service.selectedDate);
+        currentDt.setHours(currentDt.getHours() + hoursToAdd);
+        service.selectedDate = currentDt;
+      }
+    }
+
+    // Reset extension properties
+    service.isExtensionRequested = false;
+    service.extensionDuration = "";
+    await service.save();
+
+    return service;
+  } catch (error) {
+    throw catchError(error);
+  }
+};
+
+const requestCompletionIntoDb = async (
+  payload: { serviceId: string },
+  userId: string
+) => {
+  try {
+    const service = await services.findById(payload.serviceId);
+    if (!service) {
+      throw new ApiError(httpStatus.NOT_FOUND, "Service not found", "");
+    }
+
+    service.isCompletionRequested = true;
+    await service.save();
+
+    return service;
+  } catch (error) {
+    throw catchError(error);
+  }
+};
+
+const acceptCompletionIntoDb = async (
+  payload: { serviceId: string },
+  userId: string
+) => {
+  try {
+    const service = await services.findById(payload.serviceId);
+    if (!service) {
+      throw new ApiError(httpStatus.NOT_FOUND, "Service not found", "");
+    }
+
+    service.isCompletionRequested = false;
+    service.isServiceEed = true;
+    service.isCompletePayment = true;
+    await service.save();
+
+    return service;
+  } catch (error) {
+    throw catchError(error);
+  }
+};
 
 const JobsServices = {
   createNewJobsServicesIntoDb,
-   findMyAllServicesIntoDb,
-   deleteJobsServicesIntoDb,
-   findBySpecificServiceIntoDb
-
+  findMyAllServicesIntoDb,
+  deleteJobsServicesIntoDb,
+  findBySpecificServiceIntoDb,
+  extendDeadlineIntoDb,
+  acceptExtensionIntoDb,
+  requestCompletionIntoDb,
+  acceptCompletionIntoDb,
 };
 
 export default JobsServices;
