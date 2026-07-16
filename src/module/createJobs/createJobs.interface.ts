@@ -14,14 +14,15 @@ export interface TCreateJobs {
 
     jobName: string,
     photo: string,
-    jobType: "CLEANING"
+    jobType: "CLEANING",
     category: string;
+    cleaningType?: "general" | "deep";
+    duration?: number;
     isDelete?: boolean;
     rating?: number;
+    description?: string;
     availablePackages:AvailablePackages[]
     addOns:AddOns[]
-   
-    
 }
 
 export interface CreateJobsModel extends Model<TCreateJobs> {

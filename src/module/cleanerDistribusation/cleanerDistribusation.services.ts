@@ -81,6 +81,11 @@ const isAcceptedJobOfferIntoDb = async (
                 type: "service",
                 timestamp: new Date().toISOString(),
             });
+
+            // Broadcast that the job is accepted so other providers can remove it instantly
+            io.emit("job-accepted", {
+                serviceId: acceptedService._id.toString(),
+            });
         } catch {
             console.log("Socket not initialized.");
         }
@@ -248,6 +253,9 @@ const findByAllServicesIntoDb = async (
             isServiceStarted: "$service.isServiceStarted",
             isServiceEed: "$service.isServiceEed",
             totalAmount: "$service.totalAmount",
+            cleanerPayout: "$service.cleanerPayout",
+            cleaningType: "$service.cleaningType",
+            duration: "$service.duration",
           },
         },
       },
@@ -351,6 +359,7 @@ const deleteJobOfferIntoDb = async (
         },
         {
           userId: 1,
+          selectedDate: 1,
         }
       )
       .session(session);
@@ -361,6 +370,20 @@ const deleteJobOfferIntoDb = async (
         "Service not found or already cancelled.",
         ""
       );
+    }
+
+    // Apply a fine of $10 if cleaner cancels less than 3 hours before the scheduled time
+    if (service.selectedDate) {
+      const scheduledTime = new Date(service.selectedDate).getTime();
+      const currentTime = new Date().getTime();
+      const threeHoursInMs = 3 * 60 * 60 * 1000;
+      if (scheduledTime - currentTime < threeHoursInMs) {
+        await users.findByIdAndUpdate(
+          cleanerId,
+          { $inc: { fines: 10 } },
+          { session }
+        );
+      }
     }
 
     // Reset service status
@@ -455,7 +478,7 @@ const findMyAcceptedJobListIntoDb = async (
               isDelete: false,
             },
             select:
-              "addJobsPackages jobId selectedDate isAccepted isServiceStarted isServiceEed isAdvancePayment isCompletePayment totalAmount userId",
+              "addJobsPackages jobId selectedDate isAccepted isServiceStarted isServiceEed isAdvancePayment isCompletePayment totalAmount cleanerPayout cleaningType duration userId",
             populate: [
               {
                 path: "jobId",
@@ -544,7 +567,7 @@ const cleanerCompletedJobGraphIntoDb = async (query: { year?: string }, userId: 
       {
         $project: {
           dayOfWeek: { $dayOfWeek: "$service.selectedDate" }, // 1 (Sunday) to 7 (Saturday)
-          amount: "$service.totalAmount",
+          amount: "$service.cleanerPayout",
         },
       },
       {
@@ -609,7 +632,7 @@ const findMyAllRecentEarningIntoDb = async (
               isAccepted: true,
               isDelete: false,
             },
-            select: "selectedDate isAccepted totalAmount jobId isCompletePayment",
+            select: "selectedDate isAccepted totalAmount cleanerPayout cleaningType duration jobId isCompletePayment",
             populate: [
               {
                 path: "jobId",
@@ -667,7 +690,7 @@ const findMyAllRecentEarningIntoDb = async (
         title: job.jobName || 'Cleaning Service',
         photo: job.photo || '',
         date: formattedDate,
-        amount: service.totalAmount || payment.price || 0,
+        amount: service.isCompletePayment ? (service.cleanerPayout || 0) : ((service.cleanerPayout || 0) / 2),
         status: service.isCompletePayment ? 'COMPLETED' : 'ADVANCE_PAID',
       };
     });
@@ -728,14 +751,14 @@ const findMyEarningSummaryIntoDb = async (userId: string) => {
           },
           totalAmount: {
             $sum: {
-              $cond: [{ $eq: ["$service.isCompletePayment", true] }, "$service.totalAmount", 0],
+              $cond: [{ $eq: ["$service.isCompletePayment", true] }, "$service.cleanerPayout", 0],
             },
           },
           totalAdvancePayment: {
             $sum: {
               $cond: [
                 { $eq: ["$service.isCompletePayment", false] },
-                { $divide: ["$service.totalAmount", 2] },
+                { $divide: ["$service.cleanerPayout", 2] },
                 0,
               ],
             },
@@ -752,10 +775,20 @@ const findMyEarningSummaryIntoDb = async (userId: string) => {
       },
     ]);
 
-    const response = result[0] || {
+    const user = await users.findById(userId, { fines: 1 });
+    const userFines = user?.fines || 0;
+
+    const summaryData = result[0] || {
       totalCompletedJobs: 0,
       totalAmount: 0,
       totalAdvancePayment: 0,
+    };
+
+    const response = {
+      totalCompletedJobs: summaryData.totalCompletedJobs,
+      totalAmount: summaryData.totalAmount - userFines,
+      totalAdvancePayment: summaryData.totalAdvancePayment,
+      totalFines: userFines,
     };
 
     cache.set(cacheKey, response);

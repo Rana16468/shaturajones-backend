@@ -413,6 +413,9 @@ const createCheckoutSessionForSubscription = async (
       ],
       metadata,
       mode: "payment",
+      payment_intent_data: {
+        setup_future_usage: "off_session",
+      },
       success_url: `${config.stripe_payment_gateway.checkout_success_url}?sessionId={CHECKOUT_SESSION_ID}`,
       cancel_url: config.stripe_payment_gateway.checkout_cancel_url,
     });
@@ -528,6 +531,17 @@ const handleWebhookIntoDb = async (
           );
         }
 
+        let customerId = sessionData.customer as string;
+        let paymentMethodId = "";
+        if (sessionData.payment_intent) {
+          try {
+            const paymentIntent = await stripe.paymentIntents.retrieve(sessionData.payment_intent as string);
+            paymentMethodId = paymentIntent.payment_method as string;
+          } catch (e) {
+            console.error("Failed to retrieve payment intent payment method in webhook:", e);
+          }
+        }
+
         let finalServiceId = serviceId;
 
         if (!serviceId && jobId) {
@@ -552,6 +566,8 @@ const handleWebhookIntoDb = async (
             isAccepted: false,
             isServiceStarted: false,
             isServiceEed: false,
+            stripeCustomerId: customerId,
+            stripePaymentMethodId: paymentMethodId,
             isDelete: false
           } as any);
 
@@ -572,6 +588,8 @@ const handleWebhookIntoDb = async (
           if (!service.isAdvancePayment) {
             service.isAdvancePayment = true;
             service.isCompletePayment = false;
+            service.stripeCustomerId = customerId;
+            service.stripePaymentMethodId = paymentMethodId;
           } else if (!service.isCompletePayment) {
             service.isCompletePayment = true;
           }
@@ -783,6 +801,17 @@ const confirmBookingPaymentIntoDb = async (sessionId: string) => {
     );
   }
 
+  let customerId = stripeSession.customer as string;
+  let paymentMethodId = "";
+  if (stripeSession.payment_intent) {
+    try {
+      const paymentIntent = await stripe.paymentIntents.retrieve(stripeSession.payment_intent as string);
+      paymentMethodId = paymentIntent.payment_method as string;
+    } catch (e) {
+      console.error("Failed to retrieve payment intent payment method:", e);
+    }
+  }
+
   const session = await mongoose.startSession();
   try {
     session.startTransaction();
@@ -820,6 +849,8 @@ const confirmBookingPaymentIntoDb = async (sessionId: string) => {
           isAccepted: false,
           isServiceStarted: false,
           isServiceEed: false,
+          stripeCustomerId: customerId,
+          stripePaymentMethodId: paymentMethodId,
           isDelete: false
         } as any);
 
@@ -841,6 +872,8 @@ const confirmBookingPaymentIntoDb = async (sessionId: string) => {
       if (!service.isAdvancePayment) {
         service.isAdvancePayment = true;
         service.isCompletePayment = false;
+        service.stripeCustomerId = customerId;
+        service.stripePaymentMethodId = paymentMethodId;
       } else if (!service.isCompletePayment) {
         service.isCompletePayment = true;
       }
@@ -890,7 +923,22 @@ const confirmBookingPaymentIntoDb = async (sessionId: string) => {
         isRead: false,
         route: `/notification/${finalServiceId}`,
       });
-      await notification.save({ session });
+      const savedNotification = await notification.save({ session });
+
+      try {
+        const io = getSocketIO();
+        io.to(`user::${userId}`).emit("notification", {
+          _id: savedNotification._id.toString(),
+          userId,
+          title: savedNotification.title,
+          message: savedNotification.message,
+          isRead: savedNotification.isRead,
+          route: savedNotification.route,
+          createdAt: savedNotification.createdAt ? savedNotification.createdAt.toISOString() : new Date().toISOString(),
+        });
+      } catch (err) {
+        console.error("Socket error on payment confirmed notification emit:", err);
+      }
     }
 
     await session.commitTransaction();
@@ -912,6 +960,64 @@ const confirmBookingPaymentIntoDb = async (sessionId: string) => {
   }
 };
 
+const getAdminWalletIntoDb = async () => {
+  try {
+    const result = await services.aggregate([
+      {
+        $match: {
+          isDelete: false,
+          $or: [
+            { isAdvancePayment: true },
+            { isCompletePayment: true }
+          ]
+        }
+      },
+      {
+        $group: {
+          _id: null,
+          totalAmountCollected: {
+            $sum: {
+              $cond: [
+                { $eq: ["$isCompletePayment", true] },
+                "$totalAmount",
+                { $divide: ["$totalAmount", 2] }
+              ]
+            }
+          },
+          adminEarning: {
+            $sum: "$adminCommission"
+          },
+          cleanerPayoutTotal: {
+            $sum: {
+              $cond: [
+                { $eq: ["$isCompletePayment", true] },
+                "$cleanerPayout",
+                { $divide: ["$cleanerPayout", 2] }
+              ]
+            }
+          }
+        }
+      }
+    ]);
+
+    if (result.length === 0) {
+      return {
+        totalAmountCollected: 0,
+        adminEarning: 0,
+        cleanerPayoutTotal: 0
+      };
+    }
+
+    return {
+      totalAmountCollected: result[0].totalAmountCollected,
+      adminEarning: result[0].adminEarning,
+      cleanerPayoutTotal: result[0].cleanerPayoutTotal
+    };
+  } catch (error) {
+    throw catchError(error);
+  }
+};
+
 const PaymentGatewayServices = {
   createConnectedAccountAndOnboardingLinkIntoDb,
   updateOnboardingLinkIntoDb,
@@ -920,7 +1026,8 @@ const PaymentGatewayServices = {
   createCheckoutSessionForSubscription,
   handleWebhookIntoDb,
   findByAllPaymentIntoDb,
-  confirmBookingPaymentIntoDb
+  confirmBookingPaymentIntoDb,
+  getAdminWalletIntoDb
 };
 
 export default PaymentGatewayServices;

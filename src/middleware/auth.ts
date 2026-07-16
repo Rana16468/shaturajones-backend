@@ -16,13 +16,17 @@ import { USER_ACCESSIBILITY } from '../module/user/user.constant';
 const auth = (...requireRoles: TUserRole[]) => {
   return catchAsync(
     async (req: Request, _res: Response, next: NextFunction) => {
-      const token = req.headers.authorization;
+      let token = req.headers.authorization;
       if (!token) {
         throw new ApiError(
           httpStatus.UNAUTHORIZED,
           'You are not Authorized',
           '',
         );
+      }
+
+      if (token.startsWith('Bearer ')) {
+        token = token.substring(7);
       }
 
       let decoded;

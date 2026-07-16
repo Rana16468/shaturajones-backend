@@ -32,6 +32,7 @@ export type TUser = {
   fcm?:string;
   fcmToken?: string;
   isAvailable?: boolean;
+  fines?: number;
   isDelete: boolean;
 };
 

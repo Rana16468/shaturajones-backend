@@ -188,6 +188,16 @@ const confirmBookingPayment = catchAsync(
   },
 );
 
+const getAdminWallet = catchAsync(async (req: Request, res: Response) => {
+  const result = await PaymentGatewayServices.getAdminWalletIntoDb();
+  sendResponse(res, {
+    statusCode: httpStatus.OK,
+    success: true,
+    message: 'Admin wallet retrieved successfully',
+    data: result,
+  });
+});
+
 const PaymentGatewayController = {
   createConnectedAccountAndOnboardingLink,
   refreshOnboardingLink,
@@ -196,7 +206,8 @@ const PaymentGatewayController = {
   createCheckoutSession,
   handleWebhook,
   findByAllPayment,
-  confirmBookingPayment
+  confirmBookingPayment,
+  getAdminWallet
 };
 
 export default PaymentGatewayController;

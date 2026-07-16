@@ -7,6 +7,15 @@ import { TServices } from "./services.interface";
 import { cache } from "../createJobs/createJobs.constant";
 import QueryBuilder from "../../app/builder/QueryBuilder";
 import cleanerdistributions from "../cleanerDistribusation/cleanerDistribusation.model";
+import workprogress from "../workProgress/workProgress.model";
+import Stripe from "stripe";
+import config from "../../app/config";
+import payments from "../payment_gateway/payment_gateway.model";
+import users from "../user/user.model";
+
+const stripe = new Stripe(
+  config.stripe_payment_gateway.stripe_secret_key as string
+);
 
 
 const createNewJobsServicesIntoDb = async (
@@ -130,13 +139,20 @@ const createNewJobsServicesIntoDb = async (
 
     /**
      * ------------------------------------------
-     * Final Total
+     * Final Total & Payout Splits
      * ------------------------------------------
      */
     const totalAmount =
       packageTotal +
       addOnsTotal +
       customPackageTotal;
+
+    // Calculate cleaner payout based on job type and duration
+    const cleaningType = (job as any).cleaningType || "general";
+    const duration = Number((job as any).duration || 0);
+    const hourlyRate = cleaningType === "deep" ? 30 : 25;
+    const cleanerPayout = duration * hourlyRate;
+    const adminCommission = Math.max(0, totalAmount - cleanerPayout);
 
     /**
      * ------------------------------------------
@@ -150,6 +166,10 @@ const createNewJobsServicesIntoDb = async (
       addOnsService,
       addJobsPackages: cleanedAddJobsPackages,
       totalAmount,
+      cleanerPayout,
+      adminCommission,
+      cleaningType,
+      duration,
     });
 
     if (!newService) {
@@ -160,6 +180,7 @@ const createNewJobsServicesIntoDb = async (
       );
     }
 
+    cache.flushAll();
     return newService;
   } catch (error) {
     throw catchError(error);
@@ -283,6 +304,7 @@ const  deleteJobsServicesIntoDb=async(id: string):Promise<{
         if(!result){
             throw new ApiError(httpStatus.NOT_EXTENDED, 'issues by the delete jobs services', "");
         }
+        cache.flushAll();
         return{
             success: true,
             message:"successfully delete"
@@ -303,7 +325,7 @@ const findBySpecificServiceIntoDb = async (id: string) => {
     if (cachedService) {
       return cachedService;
     }
-    const service = await services.findById(id).populate("jobId").lean() as any;
+    const service = await services.findById(id).populate(["jobId", "userId"]).lean() as any;
 
     if (!service) {
       throw new ApiError(
@@ -345,6 +367,7 @@ const extendDeadlineIntoDb = async (
     service.extensionDuration = payload.extensionDuration;
     await service.save();
 
+    cache.flushAll();
     return service;
   } catch (error) {
     throw catchError(error);
@@ -354,7 +377,8 @@ const extendDeadlineIntoDb = async (
 const acceptExtensionIntoDb = async (
   serviceId: string,
   accept: boolean,
-  userId: string
+  userId: string,
+  newDeadline?: string
 ) => {
   try {
     const service = await services.findById(serviceId);
@@ -363,20 +387,24 @@ const acceptExtensionIntoDb = async (
     }
 
     if (accept) {
-      let hoursToAdd = 0;
-      if (service.extensionDuration) {
-        const duration = service.extensionDuration.toLowerCase();
-        if (duration.includes("1 hour")) hoursToAdd = 1;
-        else if (duration.includes("2 hours")) hoursToAdd = 2;
-        else if (duration.includes("4 hours")) hoursToAdd = 4;
-        else if (duration.includes("1 day")) hoursToAdd = 24;
-        else if (duration.includes("2 days")) hoursToAdd = 48;
-      }
+      if (newDeadline) {
+        service.selectedDate = new Date(newDeadline);
+      } else {
+        let hoursToAdd = 0;
+        if (service.extensionDuration) {
+          const duration = service.extensionDuration.toLowerCase();
+          if (duration.includes("1 hour")) hoursToAdd = 1;
+          else if (duration.includes("2 hours")) hoursToAdd = 2;
+          else if (duration.includes("4 hours")) hoursToAdd = 4;
+          else if (duration.includes("1 day")) hoursToAdd = 24;
+          else if (duration.includes("2 days")) hoursToAdd = 48;
+        }
 
-      if (hoursToAdd > 0 && service.selectedDate) {
-        const currentDt = new Date(service.selectedDate);
-        currentDt.setHours(currentDt.getHours() + hoursToAdd);
-        service.selectedDate = currentDt;
+        if (hoursToAdd > 0 && service.selectedDate) {
+          const currentDt = new Date(service.selectedDate);
+          currentDt.setHours(currentDt.getHours() + hoursToAdd);
+          service.selectedDate = currentDt;
+        }
       }
     }
 
@@ -385,6 +413,7 @@ const acceptExtensionIntoDb = async (
     service.extensionDuration = "";
     await service.save();
 
+    cache.flushAll();
     return service;
   } catch (error) {
     throw catchError(error);
@@ -401,9 +430,64 @@ const requestCompletionIntoDb = async (
       throw new ApiError(httpStatus.NOT_FOUND, "Service not found", "");
     }
 
-    service.isCompletionRequested = true;
+    // Verify that both before and after work progress records have been uploaded
+    const progressCount = await workprogress.countDocuments({
+      serviceId: payload.serviceId,
+      isDelete: { $ne: true }
+    });
+    if (progressCount < 2) {
+      throw new ApiError(
+        httpStatus.BAD_REQUEST,
+        "You must upload both before and after images before completing the service.",
+        ""
+      );
+    }
+
+    // Automatic charge of remaining 50% if not already paid
+    if (!service.isCompletePayment && service.stripeCustomerId && service.stripePaymentMethodId) {
+      try {
+        const remainingAmount = Math.round((service.totalAmount / 2) * 100);
+        if (remainingAmount > 0) {
+          const paymentIntent = await stripe.paymentIntents.create({
+            amount: remainingAmount,
+            currency: "usd",
+            customer: service.stripeCustomerId,
+            payment_method: service.stripePaymentMethodId,
+            off_session: true,
+            confirm: true,
+          });
+
+          // Create payment record in database
+          const customerUser = await users.findById(service.userId);
+          await payments.create({
+            userId: service.userId,
+            serviceId: service._id,
+            sessionId: `auto_${Date.now()}`,
+            price: service.totalAmount / 2,
+            currency: "usd",
+            paymentmethod: "card",
+            payment_status: "paid",
+            payable_name: customerUser?.name || "Customer",
+            payable_email: customerUser?.email || "",
+            payment_intent: paymentIntent.id,
+            country: customerUser?.country || "US",
+          });
+
+          console.log(`Auto-charged remaining 50% ($${remainingAmount / 100}) for service ${service._id}. PaymentIntent: ${paymentIntent.id}`);
+        }
+      } catch (stripeError: any) {
+        console.error(`Stripe auto-charge failed for service ${service._id}:`, stripeError.message);
+        // Even if stripe auto-charge fails (e.g. card declined), we still mark the service as ended
+        // and complete the payment on the database so the cleaner gets paid (as user requested: "cleaner to full money peye jabei").
+      }
+    }
+
+    service.isCompletionRequested = false;
+    service.isServiceEed = true;
+    service.isCompletePayment = true;
     await service.save();
 
+    cache.flushAll();
     return service;
   } catch (error) {
     throw catchError(error);
@@ -425,6 +509,7 @@ const acceptCompletionIntoDb = async (
     service.isCompletePayment = true;
     await service.save();
 
+    cache.flushAll();
     return service;
   } catch (error) {
     throw catchError(error);

@@ -66,5 +66,8 @@ router.get("/find_by_all_payment",
    auth(USER_ROLE.admin),
     PaymentGatewayController.findByAllPayment)
 
+router.get("/admin_wallet",
+   auth(USER_ROLE.admin),
+    PaymentGatewayController.getAdminWallet)
 
 export const PaymentGatewayRoutes = router;

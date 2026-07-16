@@ -61,6 +61,15 @@ const createJobsSchema = new Schema<TCreateJobs, CreateJobsModel>(
       type: String,
       required: true,
     },
+    cleaningType: {
+      type: String,
+      enum: ["general", "deep"],
+      default: "general",
+    },
+    duration: {
+      type: Number,
+      default: 0,
+    },
     isDelete: {
       type: Boolean,
       default: false,
@@ -69,6 +78,10 @@ const createJobsSchema = new Schema<TCreateJobs, CreateJobsModel>(
 
         type: String,
         required: true
+    },
+    description: {
+      type: String,
+      required: false,
     },
     rating: {
       type: Number,

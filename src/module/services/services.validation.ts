@@ -72,6 +72,10 @@ const createServiceValidationSchema = z.object({
     isCompletePayment: z.boolean().optional().default(false),
 
     isDelete: z.boolean().optional().default(false),
+
+    specialInstructions: z.string().optional(),
+
+    location: z.string().optional(),
   }),
 });
 

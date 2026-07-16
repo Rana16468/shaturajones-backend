@@ -66,7 +66,8 @@ const acceptExtension: RequestHandler = catchAsync(async (req, res) => {
   const result = await JobsServices.acceptExtensionIntoDb(
     req.params.id,
     req.body.accept,
-    req.user.id
+    req.user.id,
+    req.body.newDeadline
   );
   sendResponse(res, {
     success: true,

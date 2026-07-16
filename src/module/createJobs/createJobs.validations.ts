@@ -76,11 +76,17 @@ const createJobsZodSchema = z.object({
       required_error: "category is required",
     }),
 
+    cleaningType: z.enum(["general", "deep"]).default("general").optional(),
+
+    duration: z.number().default(0).optional(),
+
     photo: z.string().optional(),
 
     isDelete: z.boolean().optional(),
 
     rating: z.number().optional(),
+
+    description: z.string().optional(),
 
     availablePackages: z.array(availablePackageZodSchema).default([]),
 
@@ -107,11 +113,17 @@ const updateCreateJobsZodSchema = z.object({
 
     category: z.string().optional(),
 
+    cleaningType: z.enum(["general", "deep"]).optional(),
+
+    duration: z.number().optional(),
+
     photo: z.string().optional(),
 
     isDelete: z.boolean().optional(),
 
     rating: z.number().optional(),
+
+    description: z.string().optional(),
 
     availablePackages: z
       .array(updateAvailablePackageZodSchema)
