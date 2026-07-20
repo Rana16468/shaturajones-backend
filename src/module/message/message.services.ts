@@ -347,6 +347,10 @@ const single_new_message_IntoDb = async (
   data: NewMessagePayload
 ) => {
   try {
+    if (!data || !data.receiverId) {
+      throw new ApiError(httpStatus.BAD_REQUEST, "receiverId is required", "");
+    }
+
     const senderId = user._id || user.id;
 
     if (!senderId) {
