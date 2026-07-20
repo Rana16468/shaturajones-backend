@@ -15,6 +15,11 @@ export interface TTermsConditions {
   isDelete: boolean;
 }
 
+export interface TSupportEmail {
+  supportEmail: string;
+  isDelete?: boolean;
+}
+
 export interface AboutModel extends Model<TAboutUs> {
   // eslint-disable-next-line no-unused-vars
   isAboutCustomId(id: string): Promise<TAboutUs>;
@@ -29,3 +34,5 @@ export interface TermsConditionsModel extends Model<TTermsConditions> {
   // eslint-disable-next-line no-unused-vars
   isTermsConditionsCustomId(id: string): Promise<TTermsConditions>;
 }
+
+export interface SupportEmailModel extends Model<TSupportEmail> {}
