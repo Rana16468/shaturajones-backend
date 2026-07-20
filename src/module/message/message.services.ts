@@ -521,18 +521,18 @@ const single_new_message_IntoDb = async (
       { session }
     );
 
-    // ৭. কনভারসেশনের লাস্ট মেসেজ আপডেট
+  
     await conversations.updateOne(
       { _id: conversation._id },
       { $set: { lastMessage: savedMessage._id, updatedAt: new Date() } },
       { session }
     );
 
-    // ডাটাবেজ ট্রানজেকশন কমিট
+  
     await session.commitTransaction();
     session.endSession();
 
-    // ৮. ডাইনামিক সকেট রুম জয়েনিং
+
     const participantsStringArray = [senderId.toString(), data.receiverId.toString()];
     for (const participant of participantsStringArray) {
       const socketId = onlineUsers.get(participant);
@@ -549,7 +549,7 @@ const single_new_message_IntoDb = async (
       }
     }
 
-    // ৯. পপুলেটেড মেসেজ রিটার্ন ও সকেট ইমিট
+   
     const populatedMessage = await messages
       .findById(savedMessage._id)
       .populate("msgByUserId", "name email photo")
