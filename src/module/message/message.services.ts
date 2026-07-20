@@ -383,88 +383,134 @@ const findBySpecificConversationInDb = async (
 };
 
 const single_new_message_IntoDb = async (
-  user: JwtPayload,
-  data: NewMessagePayload
+  req: Request & { files?: { [fieldname: string]: Express.Multer.File[] } },
+  user: JwtPayload
 ) => {
+  const session = await mongoose.startSession();
+  
   try {
+    session.startTransaction();
+
     const senderId = user._id || user.id;
+    const data = req.body as any;
+    const files = req.files ;
 
     if (!senderId) {
       throw new ApiError(httpStatus.BAD_REQUEST, "Sender ID missing from token", "");
+    }
+
+    if (!data.receiverId) {
+      throw new ApiError(httpStatus.BAD_REQUEST, "Receiver ID is required", "");
     }
 
     if (senderId.toString() === data.receiverId.toString()) {
       throw new ApiError(httpStatus.BAD_REQUEST, "You can't chat with yourself", "");
     }
 
-    // check receiver
-    const receiver = await users.findById(data.receiverId).select("_id");
+    const receiver = await users.findById(data.receiverId).select("_id").session(session);
     if (!receiver) {
       throw new ApiError(httpStatus.NOT_FOUND, "Receiver not found", "");
     }
 
-    // find or create conversation
-    let isNewConversation = false;
+    const imageUrls: string[] = [];
+    let audioUrl = "";
 
+    if (files?.imageUrl && files.imageUrl.length > 0) {
+      const imageUploadPromises = files.imageUrl.map((file, index) => {
+        const fileName = `${Date.now()}-chat-img-${senderId}-${index}`;
+        const localPath = file.path.replace(/\\/g, '/');
+        return sendFileToCloudinary(fileName, localPath);
+      });
+      
+      const uploadedImages = await Promise.all(imageUploadPromises);
+      uploadedImages.forEach(img => imageUrls.push(img.secure_url));
+    }
+
+    if (files?.audioUrl && files.audioUrl.length > 0) {
+      const file = files.audioUrl[0];
+      const fileName = `${Date.now()}-chat-audio-${senderId}`;
+      const localPath = file.path.replace(/\\/g, '/');
+      
+      const uploadedAudio = await sendFileToCloudinary(fileName, localPath);
+      audioUrl = uploadedAudio.secure_url;
+    }
+
+    let isNewConversation = false;
     let conversation = await conversations.findOne({
       participants: { $all: [senderId, data.receiverId], $size: 2 },
-    });
+    }).session(session);
 
     if (!conversation) {
-      conversation = await conversations.create({
-        participants: [senderId, data.receiverId],
-      });
+      const [newConv] = await conversations.create(
+        [{ participants: [senderId, data.receiverId] }],
+        { session }
+      );
+      conversation = newConv;
       isNewConversation = true;
     }
 
-    // create message
+  
     const messageData = {
       text: data.text?.trim() || "",
-      imageUrl: data.imageUrl || [],
-      audioUrl: data.audioUrl || "",
+      imageUrl: imageUrls,
+      audioUrl: audioUrl,
       msgByUserId: senderId,
       conversationId: conversation._id,
     };
 
-    const savedMessage = await messages.create(messageData);
+    const [savedMessage] = await messages.create([messageData], { session });
 
+    // ৫. কনভারসেশনের লাস্ট মেসেজ আপডেট
     await conversations.updateOne(
       { _id: conversation._id },
       {
-        lastMessage: savedMessage._id,
-        updatedAt: new Date(),
-      }
+        $set: {
+          lastMessage: savedMessage._id,
+          updatedAt: new Date(),
+        },
+      },
+      { session }
     );
 
+    await session.commitTransaction();
+    session.endSession();
 
     const populatedMessage = await messages
       .findById(savedMessage._id)
-      .populate("msgByUserId", "name photo");
+      .populate("msgByUserId", "name photo")
+      .lean();
 
-
-    getSocketIO().to(conversation._id.toString()).emit("new-message", {
-      ...populatedMessage?.toObject(),
+    const socketPayload = {
+      ...populatedMessage,
       conversationId: conversation._id,
-    });
+    };
+    const io = getSocketIO();
+    const conversationRoom = conversation._id.toString();
 
-    
+    if (isNewConversation) {
+      io.to(senderId.toString()).emit("new-message", socketPayload);
+      io.to(data.receiverId.toString()).emit("new-message", socketPayload);
+      io.to(data.receiverId.toString()).emit("new-conversation", conversation);
+    } else {
+      io.to(conversationRoom).emit("new-message", socketPayload);
+    }
 
     return {
       success: true,
-      message: "Message sent successfully",
       data: {
         isNewConversation,
         conversationId: conversation._id,
+        message: socketPayload,
       },
     };
   } catch (error: any) {
-    console.error("Error single_new_message_IntoDb:", error);
+    if (session.inTransaction()) {
+      await session.abortTransaction();
+    }
+    await session.endSession();
 
-    throw new ApiError(
-      httpStatus.INTERNAL_SERVER_ERROR,
-      error.message || "Error sending message",
-      error
-    );
+    console.error("Error single_new_message_IntoDb:", error);
+    throw catchError(error);
   }
 };
 
