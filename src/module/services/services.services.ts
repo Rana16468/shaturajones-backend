@@ -192,12 +192,12 @@ const findMyAllServicesIntoDb = async (
   query: Record<string, unknown>
 ) => {
   try {
-    const cacheKey = `services_${userId}_${JSON.stringify(query)}`;
+    // const cacheKey = `services_${userId}_${JSON.stringify(query)}`;
 
-    const cachedData = cache.get(cacheKey);
-    if (cachedData) {
-      return cachedData;
-    }
+    // const cachedData = cache.get(cacheKey);
+    // if (cachedData) {
+    //   return cachedData;
+    // }
 
     const { status } = query;
 
@@ -274,7 +274,7 @@ const findMyAllServicesIntoDb = async (
       data: dataWithCleaner,
     };
 
-    cache.set(cacheKey, result);
+    // cache.set(cacheKey, result);
 
     return result;
   } catch (error) {
