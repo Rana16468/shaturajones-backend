@@ -60,7 +60,7 @@ const findBySpecificConversation:RequestHandler=catchAsync(async(req , res)=>{
 
 const single_new_message:RequestHandler=catchAsync(async(req , res)=>{
 
-    const result=await  MessageService.single_new_message_IntoDb(req.body, req.user);
+    const result=await  MessageService.single_new_message_IntoDb(req.body, req.user.id);
            sendResponse(res, {
     statusCode: httpStatus.OK,
     success: true,

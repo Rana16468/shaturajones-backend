@@ -2,7 +2,6 @@
 
 
 import httpStatus from 'http-status';
-import { JwtPayload } from 'jsonwebtoken';
 import mongoose from 'mongoose';
 import users from '../user/user.model';
 
@@ -40,45 +39,49 @@ const new_message_IntoDb = async (
   try {
     session.startTransaction(); 
 
+    // ১. ভ্যালিডেশন চেক
     if (!user?.id) {
       throw new ApiError(httpStatus.UNAUTHORIZED, "User ID not found in token", "");
     }
     if (!data.receiverId) {
       throw new ApiError(httpStatus.BAD_REQUEST, "Receiver ID required", "");
     }
-    if (user.id === data.receiverId) {
+    if (user.id.toString() === data.receiverId.toString()) {
       throw new ApiError(httpStatus.BAD_REQUEST, "You cannot message yourself", "");
     }
+
     const receiverExists = await users.exists({ _id: data.receiverId }).session(session);
     if (!receiverExists) {
       throw new ApiError(httpStatus.NOT_FOUND, "Receiver not found", "");
     }
 
-  
+    // ⚡ ২. ক্লাউডিনারি ফাইল আপলোড (Promise.all দিয়ে ফাস্ট প্যারালাল আপলোড)
     let uploadedImages: string[] = [];
     let uploadedAudio: string = "";
 
-    if (data.imageUrl && Array.isArray(data.imageUrl)) {
-      for (let i = 0; i < data.imageUrl.length; i++) {
-        const localPath = data.imageUrl[i];
+    // ক) একাধিক ছবি একসাথে আপলোড
+    if (data.imageUrl && Array.isArray(data.imageUrl) && data.imageUrl.length > 0) {
+      const uploadPromises = data.imageUrl.map((localPath, i) => {
         const fileName = `${Date.now()}-chat-img-${i}`;
-        const uploaded = await sendFileToCloudinary(fileName, localPath);
-        uploadedImages.push(uploaded.secure_url);
-      }
+        return sendFileToCloudinary(fileName, localPath);
+      });
+      const uploadedResults = await Promise.all(uploadPromises);
+      uploadedImages = uploadedResults.map((res) => res.secure_url);
     }
 
-  
+    // খ) অডিও ফাইল আপলোড
     if (data.audioUrl && typeof data.audioUrl === 'string') {
       const fileName = `${Date.now()}-chat-audio`;
       const uploaded = await sendFileToCloudinary(fileName, data.audioUrl);
       uploadedAudio = uploaded.secure_url;
     }
 
-    
+    // ৩. অবজেক্ট আইডি কনভার্সন
     const userObjectId = new mongoose.Types.ObjectId(user.id);
     const receiverObjectId = new mongoose.Types.ObjectId(data.receiverId);
     const participantObjectIds = [userObjectId, receiverObjectId];
 
+    // ৪. কনভারসেশন খোঁজা বা তৈরি করা
     let conversation = await conversations
       .findOne({
         participants: { $all: participantObjectIds, $size: 2 },
@@ -106,6 +109,7 @@ const new_message_IntoDb = async (
         conversation = createdConversation[0];
         isNewConversation = true;
       } catch (err: any) {
+        // Race condition / Duplicate key (11000) হ্যান্ডলিং
         if (err.code === 11000) {
           conversation = await conversations
             .findOne({
@@ -120,9 +124,10 @@ const new_message_IntoDb = async (
     }
 
     if (!conversation) {
-      throw new Error("Conversation creation failed.");
+      throw new ApiError(httpStatus.INTERNAL_SERVER_ERROR, "Conversation creation failed.", "");
     }
 
+    // ⚡ ৫. সকেট ও সিন (Seen) স্ট্যাটাস চেক
     const io = getSocketIO();
     const roomId = conversation._id.toString();
     let seen = false;
@@ -135,6 +140,7 @@ const new_message_IntoDb = async (
       }
     }
 
+    // ৬. মেসেজ ক্রিয়েট করা
     const createdMessage = await messages.create(
       [
         {
@@ -151,14 +157,17 @@ const new_message_IntoDb = async (
 
     const message = createdMessage[0];
 
+    // ৭. কনভারসেশনের লাস্ট মেসেজ আপডেট করা
     await conversations.updateOne(
       { _id: conversation._id },
-      { $set: { lastMessage: message._id } },
+      { $set: { lastMessage: message._id, updatedAt: new Date() } },
       { session }
     );
 
+    // ট্রানজেকশন সফলভাবে কমিট করা
     await session.commitTransaction();
 
+    // ⚡ ৮. ডাইনামিক সকেট রুম জয়েনিং
     const participantsStringArray = [user.id, data.receiverId];
     for (const participant of participantsStringArray) {
       const socketId = onlineUsers.get(participant);
@@ -175,11 +184,13 @@ const new_message_IntoDb = async (
       }
     }
 
+    // ৯. পপুলেটেড মেসেজ ডাটা রিট্রাইভ
     const populatedMessage = await messages
       .findById(message._id)
-      .populate("msgByUserId", "name email photo");
+      .populate("msgByUserId", "name email photo")
+      .lean();
 
-    // Socket Emit Events
+    // 📢 ১০. সকেট ইভেন্ট ইমিট করা
     io.to(roomId).emit("new-message", populatedMessage);
 
     if (seen) {
@@ -195,15 +206,18 @@ const new_message_IntoDb = async (
         conversationId: conversation._id,
         lastMessage: populatedMessage,
       };
+      // 🛠️ ফিক্সড: userId এর পরিবর্তে user.id ব্যবহার করা হলো
       io.to(user.id).emit("conversation-created", conversationPayload);
       io.to(data.receiverId).emit("conversation-created", conversationPayload);
     }
 
     return populatedMessage;
+
   } catch (error: any) {
     if (session.inTransaction()) {
       await session.abortTransaction();
     }
+    console.error("Error in new_message_IntoDb:", error);
     throw error;
   } finally {
     await session.endSession();
@@ -383,126 +397,185 @@ const findBySpecificConversationInDb = async (
 };
 
 const single_new_message_IntoDb = async (
-  req: Request & { files?: { [fieldname: string]: Express.Multer.File[] } },
-  user: JwtPayload
+  data: NewMessagePayload,
+  userId: string
 ) => {
   const session = await mongoose.startSession();
-  
+
   try {
     session.startTransaction();
 
-    const senderId = user._id || user.id;
-    const data = req.body as any;
-    const files = req.files ;
+    const senderId = userId;
 
     if (!senderId) {
-      throw new ApiError(httpStatus.BAD_REQUEST, "Sender ID missing from token", "");
+      throw new ApiError(httpStatus.UNAUTHORIZED, "User ID not found in token", "");
     }
-
     if (!data.receiverId) {
-      throw new ApiError(httpStatus.BAD_REQUEST, "Receiver ID is required", "");
+      throw new ApiError(httpStatus.BAD_REQUEST, "Receiver ID required", "");
     }
-
     if (senderId.toString() === data.receiverId.toString()) {
-      throw new ApiError(httpStatus.BAD_REQUEST, "You can't chat with yourself", "");
+      throw new ApiError(httpStatus.BAD_REQUEST, "You cannot message yourself", "");
     }
 
-    const receiver = await users.findById(data.receiverId).select("_id").session(session);
-    if (!receiver) {
+    // ১. রিসিভার এক্সিস্ট করে কিনা চেক
+    const receiverExists = await users.exists({ _id: data.receiverId }).session(session);
+    if (!receiverExists) {
       throw new ApiError(httpStatus.NOT_FOUND, "Receiver not found", "");
     }
 
-    const imageUrls: string[] = [];
-    let audioUrl = "";
+    // ⚡ ২. ক্লাউডিনারি ফাইল আপলোড (যেহেতু রাউটার থেকে লোকাল পাথ বডিতে আসছে)
+    let uploadedImages: string[] = [];
+    let uploadedAudio = "";
 
-    if (files?.imageUrl && files.imageUrl.length > 0) {
-      const imageUploadPromises = files.imageUrl.map((file, index) => {
-        const fileName = `${Date.now()}-chat-img-${senderId}-${index}`;
-        const localPath = file.path.replace(/\\/g, '/');
+    // ক) ইমেজ ফাইলগুলো প্যারালালি আপলোড
+    if (data.imageUrl && Array.isArray(data.imageUrl) && data.imageUrl.length > 0) {
+      const imageUploadPromises = data.imageUrl.map((localPath, i) => {
+        const fileName = `${Date.now()}-chat-img-${senderId}-${i}`;
         return sendFileToCloudinary(fileName, localPath);
       });
-      
-      const uploadedImages = await Promise.all(imageUploadPromises);
-      uploadedImages.forEach(img => imageUrls.push(img.secure_url));
+      const uploadedResults = await Promise.all(imageUploadPromises);
+      uploadedImages = uploadedResults.map((res) => res.secure_url);
     }
 
-    if (files?.audioUrl && files.audioUrl.length > 0) {
-      const file = files.audioUrl[0];
+    // খ) অডিও ফাইল আপলোড
+    if (data.audioUrl && typeof data.audioUrl === 'string') {
       const fileName = `${Date.now()}-chat-audio-${senderId}`;
-      const localPath = file.path.replace(/\\/g, '/');
-      
-      const uploadedAudio = await sendFileToCloudinary(fileName, localPath);
-      audioUrl = uploadedAudio.secure_url;
+      const uploaded = await sendFileToCloudinary(fileName, data.audioUrl);
+      uploadedAudio = uploaded.secure_url;
     }
+
+    // ৩. অবজেক্ট আইডি কনভার্সন
+    const userObjectId = new mongoose.Types.ObjectId(senderId);
+    const receiverObjectId = new mongoose.Types.ObjectId(data.receiverId);
+    const participantObjectIds = [userObjectId, receiverObjectId];
+
+    // ৪. কনভারসেশন ফাইন্ড বা ক্রিয়েট (ServiceId সহ)
+    let conversation = await conversations
+      .findOne({
+        participants: { $all: participantObjectIds, $size: 2 },
+        $or: [
+          { serviceId: data.serviceId ? new mongoose.Types.ObjectId(data.serviceId) : { $exists: false } },
+          { serviceId: { $exists: false } }
+        ]
+      })
+      .session(session);
 
     let isNewConversation = false;
-    let conversation = await conversations.findOne({
-      participants: { $all: [senderId, data.receiverId], $size: 2 },
-    }).session(session);
 
     if (!conversation) {
-      const [newConv] = await conversations.create(
-        [{ participants: [senderId, data.receiverId] }],
-        { session }
-      );
-      conversation = newConv;
-      isNewConversation = true;
+      try {
+        const createdConversation = await conversations.create(
+          [
+            {
+              serviceId: data.serviceId ? new mongoose.Types.ObjectId(data.serviceId) : null,
+              participants: participantObjectIds,
+            },
+          ],
+          { session }
+        );
+        conversation = createdConversation[0];
+        isNewConversation = true;
+      } catch (err: any) {
+        if (err.code === 11000) {
+          conversation = await conversations
+            .findOne({
+              serviceId: data.serviceId ? new mongoose.Types.ObjectId(data.serviceId) : null,
+              participants: { $all: participantObjectIds, $size: 2 },
+            })
+            .session(session);
+        } else {
+          throw err;
+        }
+      }
     }
 
-  
-    const messageData = {
-      text: data.text?.trim() || "",
-      imageUrl: imageUrls,
-      audioUrl: audioUrl,
-      msgByUserId: senderId,
-      conversationId: conversation._id,
-    };
+    if (!conversation) {
+      throw new ApiError(httpStatus.INTERNAL_SERVER_ERROR, "Conversation creation failed", "");
+    }
 
-    const [savedMessage] = await messages.create([messageData], { session });
+    // ৫. সকেট রুম ও সিন (Seen) স্ট্যাটাস চেক
+    const io = getSocketIO();
+    const roomId = conversation._id.toString();
+    let seen = false;
 
-    // ৫. কনভারসেশনের লাস্ট মেসেজ আপডেট
-    await conversations.updateOne(
-      { _id: conversation._id },
-      {
-        $set: {
-          lastMessage: savedMessage._id,
-          updatedAt: new Date(),
+    const receiverSocketId = onlineUsers.get(data.receiverId);
+    if (receiverSocketId) {
+      const receiverSocket = io.sockets.sockets.get(receiverSocketId);
+      if (receiverSocket && receiverSocket.data.currentConversationId === roomId) {
+        seen = true;
+      }
+    }
+
+    // ৬. মেসেজ ডেটাবেজে ক্রিয়েট করা
+    const [savedMessage] = await messages.create(
+      [
+        {
+          text: data.text ? data.text.trim() : "",
+          imageUrl: uploadedImages,
+          audioUrl: uploadedAudio,
+          msgByUserId: userObjectId,
+          conversationId: conversation._id,
+          seen,
         },
-      },
+      ],
       { session }
     );
 
+    // ৭. কনভারসেশনের লাস্ট মেসেজ আপডেট
+    await conversations.updateOne(
+      { _id: conversation._id },
+      { $set: { lastMessage: savedMessage._id, updatedAt: new Date() } },
+      { session }
+    );
+
+    // ডাটাবেজ ট্রানজেকশন কমিট
     await session.commitTransaction();
     session.endSession();
 
-    const populatedMessage = await messages
-      .findById(savedMessage._id)
-      .populate("msgByUserId", "name photo")
-      .lean();
+    // ৮. ডাইনামিক সকেট রুম জয়েনিং
+    const participantsStringArray = [senderId.toString(), data.receiverId.toString()];
+    for (const participant of participantsStringArray) {
+      const socketId = onlineUsers.get(participant);
+      if (!socketId) continue;
 
-    const socketPayload = {
-      ...populatedMessage,
-      conversationId: conversation._id,
-    };
-    const io = getSocketIO();
-    const conversationRoom = conversation._id.toString();
+      const participantSocket = io.sockets.sockets.get(socketId);
+      if (!participantSocket) continue;
 
-    if (isNewConversation) {
-      io.to(senderId.toString()).emit("new-message", socketPayload);
-      io.to(data.receiverId.toString()).emit("new-message", socketPayload);
-      io.to(data.receiverId.toString()).emit("new-conversation", conversation);
-    } else {
-      io.to(conversationRoom).emit("new-message", socketPayload);
+      if (!participantSocket.rooms.has(roomId)) {
+        participantSocket.join(roomId);
+      }
+      if (participant === senderId.toString()) {
+        participantSocket.data.currentConversationId = roomId;
+      }
     }
 
-    return {
-      success: true,
-      data: {
-        isNewConversation,
+    // ৯. পপুলেটেড মেসেজ রিটার্ন ও সকেট ইমিট
+    const populatedMessage = await messages
+      .findById(savedMessage._id)
+      .populate("msgByUserId", "name email photo")
+      .lean();
+
+    io.to(roomId).emit("new-message", populatedMessage);
+
+    if (seen) {
+      io.to(roomId).emit("messages-seen", {
         conversationId: conversation._id,
-        message: socketPayload,
-      },
-    };
+        seenBy: data.receiverId,
+        messageIds: [savedMessage._id],
+      });
+    }
+
+    if (isNewConversation) {
+      const conversationPayload = {
+        conversationId: conversation._id,
+        lastMessage: populatedMessage,
+      };
+      io.to(senderId.toString()).emit("conversation-created", conversationPayload);
+      io.to(data.receiverId.toString()).emit("conversation-created", conversationPayload);
+    }
+
+    return populatedMessage;
+
   } catch (error: any) {
     if (session.inTransaction()) {
       await session.abortTransaction();
