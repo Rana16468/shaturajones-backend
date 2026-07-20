@@ -75,9 +75,23 @@ cron.schedule('*/30 * * * *', async () => {
 
 
 app.use(
-  config.file_path as string,
-  express.static(path.join(__dirname, "public"))
+  "/src/public",
+  express.static(path.join(process.cwd(), "src", "public"))
 );
+app.use(
+  "/public",
+  express.static(path.join(process.cwd(), "public"))
+);
+app.use(
+  "/src/public",
+  express.static(path.join(process.cwd(), "public"))
+);
+if (config.file_path) {
+  app.use(
+    config.file_path as string,
+    express.static(path.join(process.cwd(), "src", "public"))
+  );
+}
 
 
 app.get("/", (_req, res) => {

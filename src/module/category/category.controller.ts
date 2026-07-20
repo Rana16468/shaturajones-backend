@@ -24,9 +24,21 @@ const getAllCategories: RequestHandler = catchAsync(async (req, res) => {
   });
 });
 
+const deleteCategory: RequestHandler = catchAsync(async (req, res) => {
+  const { id } = req.params;
+  const result = await CategoryServices.deleteCategoryFromDb(id);
+  sendResponse(res, {
+    success: true,
+    statusCode: httpStatus.OK,
+    message: "Successfully deleted Category",
+    data: result,
+  });
+});
+
 const CategoryController = {
   createCategory,
   getAllCategories,
+  deleteCategory,
 };
 
 export default CategoryController;
