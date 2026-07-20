@@ -8,6 +8,8 @@ export  interface TNotification {
      isRead:boolean
      route: string
      isDelete: boolean;
+     createdAt?: Date;
+     updatedAt?: Date;
 };
 
 export interface NotificationModel extends Model<  TNotification> {
