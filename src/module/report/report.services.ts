@@ -6,13 +6,35 @@ import { TReport } from "./report.interface";
 import User from "../user/user.model";
 import notifications from "../notification/notification.model";
 import { supportEmailModel } from "../settings/settings.modal";
+import { sendFileToCloudinary } from "../../utility/Cloudinary/sendFileToCloudinary";
 
-const createReportInDb = async (payload: Partial<TReport>) => {
+const createReportInDb = async (payload: Partial<TReport> & { photo?: any[] }) => {
   try {
-    const result = await Report.create(payload);
+    let uploadedPhotos: string[] = [];
+
+    if (payload.photo && Array.isArray(payload.photo)) {
+      for (let i = 0; i < payload.photo.length; i++) {
+        const fileObj = payload.photo[i];
+        const fileName = `${Date.now()}-report-${i}`;
+        
+        const uploaded = await sendFileToCloudinary(fileName, fileObj.photo);
+        uploadedPhotos.push(uploaded.secure_url);
+      }
+    }
+
+    
+    const finalPayload = {
+      ...payload,
+      images: uploadedPhotos, 
+    };
+
+    // delete finalPayload.photo; 
+
+    const result = await Report.create(finalPayload);
     return result;
   } catch (error) {
-    catchError(error);
+
+    throw catchError(error); 
   }
 };
 

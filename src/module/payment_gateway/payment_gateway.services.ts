@@ -923,7 +923,7 @@ const confirmBookingPaymentIntoDb = async (sessionId: string) => {
         isRead: false,
         route: `/notification/${finalServiceId}`,
       });
-      const savedNotification = await notification.save({ session });
+      const savedNotification = await notification.save({ session }) as any;
 
       try {
         const io = getSocketIO();

@@ -13,10 +13,7 @@ const router = express.Router();
 router.post(
   "/create_jobs",
   auth(USER_ROLE.admin, USER_ROLE.superAdmin),
-
- 
   upload.single("photo"),
-
   (req: Request, res: Response, next: NextFunction) => {
     try {
       if (req.body.data) {
@@ -24,16 +21,14 @@ router.post(
       }
 
       if (req.file) {
-        req.body.photo = req.file.path.replace(/\\/g, "/"); // or req.file.filename
+        req.body.photo = req.file.path.replace(/\\/g, "/");
       }
-  
 
       next();
     } catch (error) {
       next(new ApiError(httpStatus.BAD_REQUEST, "Invalid JSON data", ""));
     }
   },
-
   validationRequest(createJobValidation.createJobsZodSchema),
   CreateJobController.createJob
 );

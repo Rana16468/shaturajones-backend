@@ -12,6 +12,16 @@ import QueryBuilder from "../../app/builder/QueryBuilder";
 import { user_search_filed } from "./auth.constant";
 import { TUser } from "../user/user.interface";
 import { cache } from "../createJobs/createJobs.constant";
+import workprogress from "../workProgress/workProgress.model";
+import messages from "../message/message.model";
+import { Report } from "../report/report.model";
+import deleteFileFromCloudinary from "../../utility/Cloudinary/deleteFileFromCloudinary";
+import services from "../services/services.model";
+import ratingreviews from "../ratingReview/ratingReview.model";
+import payments from "../payment_gateway/payment_gateway.model";
+import notifications from "../notification/notification.model";
+import conversations from "../conversation/conversation.model";
+import cleanerdistributions from "../cleanerDistribusation/cleanerDistribusation.model";
 
 
 
@@ -322,36 +332,97 @@ const findByAllUsersAdminIntoDb = async (
   }
 };
 
-// ============== DELETE ACCOUNT SERVICE ==============
+
 const deleteAccountIntoDb = async (
   userId: string,
-
-  userRole: string
 ) => {
+  const session = await mongoose.startSession();
+
   try {
-    // ✅ SECURITY FIX: Authorization - user can delete own account or admin can delete any
-    if (userRole !== "admin") {
-      throw new ApiError(
-        httpStatus.FORBIDDEN,
-        "You are not authorized to delete this account",
-        ""
-      );
-    }
+    session.startTransaction();
 
-    const user = await users.findById(userId);
+    
 
-    if (!user) {
+    const userObjectId = new mongoose.Types.ObjectId(userId);
+
+    const cloudinaryUrls: string[] = [];
+
+    const userDoc = await users.findById(userId).select("photo").session(session);
+    if (!userDoc) {
       throw new ApiError(httpStatus.NOT_FOUND, "User not found", "");
     }
+    if (userDoc.photo) cloudinaryUrls.push(userDoc.photo);
 
-   
+    const progressDocs = await workprogress.find({
+      $or: [{ cleanerId: userObjectId }, { customerId: userObjectId }]
+    }).select("photo").session(session);
+    
+    progressDocs.forEach(doc => {
+      if (doc.photo && Array.isArray(doc.photo)) {
+        doc.photo.forEach(p => {
+          if (p.photo) cloudinaryUrls.push(p.photo);
+        });
+      }
+    });
+    const messageDocs = await messages.find({ msgByUserId: userObjectId })
+      .select("imageUrl audioUrl")
+      .session(session);
+
+    messageDocs.forEach(doc => {
+      if (doc.imageUrl && Array.isArray(doc.imageUrl)) {
+        cloudinaryUrls.push(...doc.imageUrl);
+      }
+      if (doc.audioUrl) {
+        cloudinaryUrls.push(doc.audioUrl);
+      }
+    });
+    const reportDocs = await Report.find({
+      $or: [{ customerId: userObjectId }, { providerId: userObjectId }]
+    }).select("images").session(session);
+
+    reportDocs.forEach(doc => {
+      if (doc.images && Array.isArray(doc.images)) {
+        cloudinaryUrls.push(...doc.images);
+      }
+    });
+
+    const uniqueUrls = [...new Set(cloudinaryUrls.filter(url => typeof url === 'string' && url.trim() !== ''))];
+    
+    if (uniqueUrls.length > 0) {
+      try {
+        await Promise.all(uniqueUrls.map(url => deleteFileFromCloudinary(url)));
+      } catch (cloudinaryErr) {
+        console.error("Cloudinary mass deletion error:", cloudinaryErr);
+      }
+    }
+
+    // -----------------------------------------------------------------
+    // 🔨 STEP 3: Database থেকে চিরতরে মুছে ফেলা (Hard Delete)
+    // -----------------------------------------------------------------
+    await services.deleteMany({ userId: userObjectId }, { session });
+    await workprogress.deleteMany({ $or: [{ cleanerId: userObjectId }, { customerId: userObjectId }] }, { session });
+    await Report.deleteMany({ $or: [{ customerId: userObjectId }, { providerId: userObjectId }] }, { session });
+    await ratingreviews.deleteMany({ customerId: userObjectId }, { session });
+    // await payments.deleteMany({ userId: userObjectId }, { session });
+    await notifications.deleteMany({ userId: userObjectId }, { session });
+    await messages.deleteMany({ msgByUserId: userObjectId }, { session });
+    await conversations.deleteMany({ participants: userObjectId }, { session });
+    await cleanerdistributions.deleteMany({ userId: userObjectId }, { session });
+    
+    await users.findByIdAndDelete(userId, { session });
+    await session.commitTransaction();
+    session.endSession();
 
     return {
       success: true,
-      message: "Account deleted successfully",
+      message: `Account, ${uniqueUrls.length} media files, and all associated records permanently deleted.`,
     };
-  } catch (error: unknown) {
-    catchError(error, 'Account deletion failed')
+  } catch (error: any) {
+    if (session.inTransaction()) {
+      await session.abortTransaction();
+    }
+    await session.endSession();
+    throw catchError(error);
   }
 };
 

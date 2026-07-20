@@ -96,7 +96,7 @@ router.patch(
 );
 
 
-router.delete("/delete_account/:id", auth(USER_ROLE.admin,USER_ROLE.cleaner, USER_ROLE.customer, USER_ROLE.superAdmin), AuthController.deleteAdmin)
+//router.delete("/delete_account/:id", auth(USER_ROLE.admin,USER_ROLE.cleaner, USER_ROLE.customer, USER_ROLE.superAdmin), AuthController.deleteAdmin)
 
 router.get("/find_my_avatar", auth(USER_ROLE.admin,USER_ROLE.customer, USER_ROLE.cleaner, USER_ROLE.superAdmin),AuthController.myAvatar)
 

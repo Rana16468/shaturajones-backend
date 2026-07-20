@@ -12,6 +12,9 @@ import messages from './message.model';
 import ApiError from '../../app/error/ApiError';
 import { getSocketIO, onlineUsers } from '../../socket/connectSocket';
 import QueryBuilder from '../../app/builder/QueryBuilder';
+import { sendFileToCloudinary } from '../../utility/Cloudinary/sendFileToCloudinary';
+import catchError from '../../app/error/catchError';
+import deleteFileFromCloudinary from '../../utility/Cloudinary/deleteFileFromCloudinary';
 
 
 
@@ -28,13 +31,15 @@ interface NewMessagePayload {
   audioUrl?: string;
 }
 
-export const new_message_IntoDb = async (
+const new_message_IntoDb = async (
   user: JwtPayloads,
   data: NewMessagePayload
 ) => {
   const session = await mongoose.startSession();
 
   try {
+    session.startTransaction(); 
+
     if (!user?.id) {
       throw new ApiError(httpStatus.UNAUTHORIZED, "User ID not found in token", "");
     }
@@ -44,29 +49,45 @@ export const new_message_IntoDb = async (
     if (user.id === data.receiverId) {
       throw new ApiError(httpStatus.BAD_REQUEST, "You cannot message yourself", "");
     }
-
-    const receiverExists = await users.exists({ _id: data.receiverId });
+    const receiverExists = await users.exists({ _id: data.receiverId }).session(session);
     if (!receiverExists) {
       throw new ApiError(httpStatus.NOT_FOUND, "Receiver not found", "");
     }
 
-    session.startTransaction();
+  
+    let uploadedImages: string[] = [];
+    let uploadedAudio: string = "";
 
-   
+    if (data.imageUrl && Array.isArray(data.imageUrl)) {
+      for (let i = 0; i < data.imageUrl.length; i++) {
+        const localPath = data.imageUrl[i];
+        const fileName = `${Date.now()}-chat-img-${i}`;
+        const uploaded = await sendFileToCloudinary(fileName, localPath);
+        uploadedImages.push(uploaded.secure_url);
+      }
+    }
+
+  
+    if (data.audioUrl && typeof data.audioUrl === 'string') {
+      const fileName = `${Date.now()}-chat-audio`;
+      const uploaded = await sendFileToCloudinary(fileName, data.audioUrl);
+      uploadedAudio = uploaded.secure_url;
+    }
+
+    
     const userObjectId = new mongoose.Types.ObjectId(user.id);
     const receiverObjectId = new mongoose.Types.ObjectId(data.receiverId);
     const participantObjectIds = [userObjectId, receiverObjectId];
 
-    
-let conversation = await conversations
-  .findOne({
-    participants: { $all: participantObjectIds, $size: 2 },
-    $or: [
-      { serviceId:  new mongoose.Types.ObjectId(data.serviceId)  },
-      { serviceId: { $exists: false } } 
-    ]
-  })
-  .session(session);
+    let conversation = await conversations
+      .findOne({
+        participants: { $all: participantObjectIds, $size: 2 },
+        $or: [
+          { serviceId: data.serviceId ? new mongoose.Types.ObjectId(data.serviceId) : { $exists: false } },
+          { serviceId: { $exists: false } } 
+        ]
+      })
+      .session(session);
 
     let isNewConversation = false;
 
@@ -85,7 +106,6 @@ let conversation = await conversations
         conversation = createdConversation[0];
         isNewConversation = true;
       } catch (err: any) {
-        // Fallback for extreme race conditions (e.g., duplicate index errors code 11000)
         if (err.code === 11000) {
           conversation = await conversations
             .findOne({
@@ -118,9 +138,9 @@ let conversation = await conversations
     const createdMessage = await messages.create(
       [
         {
-          text: data.text.trim(),
-          imageUrl: data.imageUrl ?? [],
-          audioUrl: data.audioUrl ?? "",
+          text: data.text ? data.text.trim() : "",
+          imageUrl: uploadedImages, 
+          audioUrl: uploadedAudio,   
           msgByUserId: userObjectId,
           conversationId: conversation._id,
           seen,
@@ -139,9 +159,6 @@ let conversation = await conversations
 
     await session.commitTransaction();
 
-    // -----------------------------------------
-    // Socket Room Assignment & State management
-    // -----------------------------------------
     const participantsStringArray = [user.id, data.receiverId];
     for (const participant of participantsStringArray) {
       const socketId = onlineUsers.get(participant);
@@ -153,7 +170,6 @@ let conversation = await conversations
       if (!participantSocket.rooms.has(roomId)) {
         participantSocket.join(roomId);
       }
-      // Set the context only for the current active writer
       if (participant === user.id) {
         participantSocket.data.currentConversationId = roomId;
       }
@@ -163,7 +179,7 @@ let conversation = await conversations
       .findById(message._id)
       .populate("msgByUserId", "name email photo");
 
-    // Emit Events
+    // Socket Emit Events
     io.to(roomId).emit("new-message", populatedMessage);
 
     if (seen) {
@@ -175,12 +191,12 @@ let conversation = await conversations
     }
 
     if (isNewConversation) {
-      const payload = {
+      const conversationPayload = {
         conversationId: conversation._id,
         lastMessage: populatedMessage,
       };
-      io.to(user.id).emit("conversation-created", payload);
-      io.to(data.receiverId).emit("conversation-created", payload);
+      io.to(user.id).emit("conversation-created", conversationPayload);
+      io.to(data.receiverId).emit("conversation-created", conversationPayload);
     }
 
     return populatedMessage;
@@ -199,12 +215,37 @@ const updateMessageById_IntoDb = async (
   updateData: Partial<{ text: string; imageUrl: string[] }>
 ) => {
   const session = await mongoose.startSession();
-  session.startTransaction();
 
   try {
+    session.startTransaction();
+
+    const existingMessage = await messages.findById(messageId).session(session);
+    if (!existingMessage) {
+      throw new ApiError(httpStatus.NOT_FOUND, 'Message not found', '');
+    }
+
+    const finalUpdateData: any = {};
+    if (updateData.text !== undefined) {
+      finalUpdateData.text = updateData.text.trim();
+    }
+
+    if (updateData.imageUrl && Array.isArray(updateData.imageUrl)) {
+      let uploadedImages: string[] = [];
+      
+      for (let i = 0; i < updateData.imageUrl.length; i++) {
+        const localPath = updateData.imageUrl[i];
+        const fileName = `${Date.now()}-update-chat-img-${i}`;
+        const uploaded = await sendFileToCloudinary(fileName, localPath);
+        uploadedImages.push(uploaded.secure_url);
+      }
+      
+      finalUpdateData.imageUrl = uploadedImages;
+    }
+
+    
     const updated = await messages.findByIdAndUpdate(
       messageId,
-      { $set: updateData },
+      { $set: finalUpdateData },
       { new: true, session }
     );
 
@@ -212,16 +253,10 @@ const updateMessageById_IntoDb = async (
       throw new ApiError(httpStatus.NOT_FOUND, 'Message not found', '');
     }
 
-   
-    await conversations.updateMany(
-      { lastMessage: messageId },
-      { $set: { lastMessage: updated._id } },
-      { session }
-    );
-
-    const conversation = await conversations.findById(
-      updated.conversationId
-    ).session(session);
+  
+    const conversation = await conversations
+      .findById(updated.conversationId)
+      .session(session);
 
     if (!conversation) {
       throw new ApiError(httpStatus.NOT_FOUND, 'Conversation not found', '');
@@ -230,7 +265,7 @@ const updateMessageById_IntoDb = async (
     await session.commitTransaction();
     session.endSession();
 
-
+   
     const io = getSocketIO();
     conversation.participants.forEach((participantId) => {
       io.to(participantId.toString()).emit('message-updated', updated);
@@ -238,43 +273,49 @@ const updateMessageById_IntoDb = async (
 
     return updated;
   } catch (error: any) {
-    await session.abortTransaction();
-    session.endSession();
-    throw new ApiError(
-      httpStatus.INTERNAL_SERVER_ERROR,
-      'Error updating message',
-      error
-    );
+    if (session.inTransaction()) {
+      await session.abortTransaction();
+    }
+    await session.endSession();
+    
+    throw catchError(error);
   }
 };
 
 
 const deleteMessageById_IntoDb = async (messageId: string) => {
   const session = await mongoose.startSession();
-  session.startTransaction();
 
   try {
+    session.startTransaction();
     const message = await messages.findById(messageId).session(session);
     if (!message) {
       throw new ApiError(httpStatus.NOT_FOUND, "Message not found", "");
     }
-
     const conversationId = message.conversationId;
 
+    if (message.imageUrl && Array.isArray(message.imageUrl) && message.imageUrl.length > 0) {
+      for (const imgUrl of message.imageUrl) {
+        await deleteFileFromCloudinary(imgUrl);
+      }
+    }
 
-    await message.deleteOne({ _id: messageId }).session(session);
+    if (message.audioUrl && typeof message.audioUrl === 'string' && message.audioUrl !== "") {
+      await deleteFileFromCloudinary(message.audioUrl);
+    }
+
+    await message.deleteOne().session(session);
 
     const conversation = await conversations.findById(conversationId).session(session);
     if (!conversation) {
       throw new ApiError(httpStatus.NOT_FOUND, "Conversation not found", "");
     }
 
- 
     if (conversation.lastMessage?.toString() === messageId.toString()) {
-      const newLastMessage = await messages.findOne({ conversationId })
+      const newLastMessage = await messages
+        .findOne({ conversationId })
         .sort({ createdAt: -1 })
         .session(session);
-
 
       conversation.lastMessage = newLastMessage ? newLastMessage._id : null;
       await conversation.save({ session });
@@ -297,13 +338,12 @@ const deleteMessageById_IntoDb = async (messageId: string) => {
       messageId,
     };
   } catch (error: any) {
-    await session.abortTransaction();
-    session.endSession();
-    throw new ApiError(
-      httpStatus.INTERNAL_SERVER_ERROR,
-      "Error deleting message",
-      error,
-    );
+    if (session.inTransaction()) {
+      await session.abortTransaction();
+    }
+    await session.endSession();
+    
+    throw catchError(error);
   }
 };
 

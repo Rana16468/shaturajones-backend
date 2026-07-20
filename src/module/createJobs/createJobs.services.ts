@@ -6,29 +6,41 @@ import createjobs from "./createJobs.model";
 import QueryBuilder from "../../app/builder/QueryBuilder";
 import { cache, job_search_filed } from "./createJobs.constant";
 import fs from "fs";
+import { sendFileToCloudinary } from "../../utility/Cloudinary/sendFileToCloudinary";
+import deleteFileFromCloudinary from "../../utility/Cloudinary/deleteFileFromCloudinary";
 
-const createJobIntoDb=async(payload:TCreateJobs):Promise<{
-    success: boolean,
-    message: string
-}>=>{
+const createJobIntoDb = async (payload: TCreateJobs): Promise<{
+  success: boolean,
+  message: string
+}> => {
+  try {
+    const finalPayload = { ...payload };
 
-     try{
+    if (payload.photo && typeof payload.photo === 'string') {
+      const fileName = `${Date.now()}-job-photo`;
+      
+      const uploaded = await sendFileToCloudinary(fileName, payload.photo);
+      
+      finalPayload.photo = uploaded.secure_url;
+    }
+    const result = await createjobs.create(finalPayload);
 
-        const result=await createjobs.create(payload);
+    if (!result) {
+      throw new ApiError(
+        httpStatus.INTERNAL_SERVER_ERROR, 
+        'Failed to create job, something went wrong', 
+        ""
+      );
+    }
 
-        if(!result){
-            throw new ApiError(httpStatus.NOT_EXTENDED, 'issues by the create jobs section',"")
-        }
+    return {
+      success: true,
+      message: "Successfully created a new job"
+    };
 
-        return {
-            success: true , 
-            message:"successfully create a new jobs"
-        }
-
-     }
-     catch(error){
-        throw catchError(error)
-     }
+  } catch (error) {
+    throw catchError(error);
+  }
 };
 
 const findByAllJobsIntoDb = async (
@@ -106,7 +118,7 @@ const updateJobsIntoDb = async (
       .lean();
 
     if (!isExistJobs) {
-      throw new Error("Job not found");
+      throw new ApiError(httpStatus.NOT_FOUND, "Job not found", "");
     }
 
     const updateData: any = {
@@ -115,19 +127,34 @@ const updateJobsIntoDb = async (
       },
     };
 
-    if (photo) {
-      updateData.$set.photo = photo.replace(/\\/g, "/");
+
+    if (photo && typeof photo === 'string') {
+    
+      const fileName = `${Date.now()}-update-job`;
+      const uploaded = await sendFileToCloudinary(fileName, photo);
+      
+     
+      updateData.$set.photo = uploaded.secure_url;
+
+  
+      if (isExistJobs.photo) {
+        try {
+          await deleteFileFromCloudinary(isExistJobs.photo);
+        } catch (err) {
+          console.error("Old photo delete failed from Cloudinary:", err);
+        }
+      }
     }
 
     if (availablePackages) {
       updateData.$set.availablePackages = availablePackages;
     }
 
-    // ✅ Update addOns
     if (addOns) {
       updateData.$set.addOns = addOns;
     }
 
+    // ৩. ডেটাবেজ আপডেট করুন
     const result = await createjobs.findByIdAndUpdate(
       id,
       updateData,
@@ -137,20 +164,10 @@ const updateJobsIntoDb = async (
       }
     );
 
-    if (photo && isExistJobs.photo) {
-      try {
-        if (fs.existsSync(isExistJobs.photo)) {
-          fs.unlinkSync(isExistJobs.photo);
-        }
-      } catch (err) {
-        console.log("Photo delete failed:", err);
-      }
-    }
-
     if (!result) {
       throw new ApiError(
-        httpStatus.NOT_EXTENDED,
-        "issues by the update jobs",
+        httpStatus.INTERNAL_SERVER_ERROR,
+        "Issues by the update jobs",
         ""
       );
     }
@@ -166,6 +183,7 @@ const updateJobsIntoDb = async (
 
 const deleteJobsIntoDb = async (id: string) => {
   try {
+
     const job = await createjobs
       .findById(id)
       .select("photo")
@@ -174,18 +192,29 @@ const deleteJobsIntoDb = async (id: string) => {
     if (!job) {
       throw new ApiError(httpStatus.NOT_FOUND, "Job not found", "");
     }
-
     const result = await createjobs.findByIdAndDelete(id);
+
+    if (!result) {
+      throw new ApiError(
+        httpStatus.INTERNAL_SERVER_ERROR,
+        "Failed to delete job from database",
+        ""
+      );
+    }
+
     if (job.photo) {
       try {
-        if (fs.existsSync(job.photo)) {
-          fs.unlinkSync(job.photo);
-        }
+        await deleteFileFromCloudinary(job.photo);
       } catch (err) {
-        console.log("Photo delete error:", err);
+        console.error("Cloudinary photo delete error during job deletion:", err);
       }
     }
-    return result;
+
+    return {
+      success: true,
+      message: "Successfully deleted the job and associated media",
+      data: result
+    };
   } catch (error) {
     throw catchError(error);
   }

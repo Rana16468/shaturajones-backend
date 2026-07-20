@@ -28,10 +28,11 @@ router.post(
         [fieldname: string]: Express.Multer.File[];
       };
 
+      // আপনার দেওয়া লুপ স্ট্রাকচারের সাথে মিল রাখার জন্য:
       if (files?.photo?.length) {
-        req.body.images = files.photo.map((file) =>
-          file.path.replace(/\\/g, "/"),
-        );
+        req.body.photo = files.photo.map((file) => ({
+          photo: file.path.replace(/\\/g, "/"),
+        }));
       }
 
       next();
