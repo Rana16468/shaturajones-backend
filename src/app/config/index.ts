@@ -2,8 +2,8 @@ import donenv from 'dotenv';
 import path from 'path';
 donenv.config({ path: path.join(process.cwd(), '.env') });
 export default {
-  port: process.env.PORT,
-  host: process.env.HOST,
+  port: process.env.PORT || 4000,
+  host: process.env.HOST || '0.0.0.0',
   file_path: process.env.FILE_PATH,
   database_url: process.env.DATABASE_URL,
   NODE_ENV: process.env.NODE_ENV,
