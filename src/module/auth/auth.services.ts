@@ -22,6 +22,7 @@ import payments from "../payment_gateway/payment_gateway.model";
 import notifications from "../notification/notification.model";
 import conversations from "../conversation/conversation.model";
 import cleanerdistributions from "../cleanerDistribusation/cleanerDistribusation.model";
+import { sendFileToCloudinary } from "../../utility/Cloudinary/sendFileToCloudinary";
 
 
 
@@ -212,15 +213,20 @@ const myAvatarIntoDb = async (
   }
 };
 
-const changeMyProfileIntoDb = async (req: Response & {
-    file?: Express.Multer.File
-}, id: string) => {
+const changeMyProfileIntoDb = async (
+  req: Request & { file?: Express.Multer.File }, 
+  id: string
+) => {
   try {
-    const file = req.file ;
+    
     const body = req.body as any;
 
-    const existingUser = await users.findById(id).select("photo");
+  
 
+    // ১. প্রথমে ইউজারের বর্তমান প্রোফাইল পিকচারটি তুলে নিন
+    const existingUser = await users.findById(id).select("photo").lean();
+
+    // ২. সবার আগে ইউজার এক্সিস্ট করে কিনা নিশ্চিত হোন
     if (!existingUser) {
       throw new ApiError(httpStatus.NOT_FOUND, "User not found", "");
     }
@@ -231,19 +237,22 @@ const changeMyProfileIntoDb = async (req: Response & {
     if (body.name) {
       updateData.name = body.name.trim();
     }
+
+    // ৩. যদি নতুন কোনো ফাইল আপলোড করা হয়
     if (body.photo) {
-      updateData.photo = body.photo.replace(/\\/g, "/");
-    }
+      const localPath = body.photo.replace(/\\/g, "/");
+      const fileName = `${Date.now()}-user-profile-${id}`;
+      
+      // ক) নতুন ফাইলটি ক্লাউডিনারিতে আপলোড করুন
+      const uploaded = await sendFileToCloudinary(fileName, localPath);
+      updateData.photo = uploaded.secure_url;
 
-    if (file) {
-      updateData.photo = file.path.replace(/\\/g, "/");
-
-    
+      // খ) নতুন ফাইল সফলভাবে আপলোড সম্পন্ন হওয়ার পর কেবল পুরোনো ফাইলটি ডিলিট করুন
       if (existingUser.photo) {
         try {
-          fs.unlinkSync(existingUser.photo);
+          await deleteFileFromCloudinary(existingUser.photo);
         } catch (err) {
-          console.log("Old photo delete failed:", err);
+          console.log("Old profile photo delete failed from Cloudinary:", err);
         }
       }
     }
@@ -263,7 +272,7 @@ const changeMyProfileIntoDb = async (req: Response & {
       updateData.dateOfBirth = body.dateOfBirth;
     }
 
-    // ✅ country (FIXED: was countryOrigin before)
+    // ✅ country
     if (body.country) {
       updateData.country = body.country.trim();
     }
@@ -289,7 +298,7 @@ const changeMyProfileIntoDb = async (req: Response & {
       data: result,
     };
   } catch (error) {
-    throw error;
+    throw catchError(error);
   }
 };
 
