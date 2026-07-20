@@ -1,5 +1,3 @@
-
-
 const systemArtc = () => {
   return `<!DOCTYPE html>
 <html lang="en">
@@ -7,97 +5,120 @@ const systemArtc = () => {
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Service Booking — Telemetry & Diagnostics</title>
-    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600;700&family=Space+Grotesk:wght@400;500;600;700&family=Plus+Jakarta+Sans:wght@400;500;600&display=swap" rel="stylesheet">
     <style>
         :root {
-            --bg: #f0f2f7;
-            --surface: #ffffff;
-            --surface-raised: #ffffff;
-            --surface-tinted: #f7f8fc;
-            --accent: #4f6ef7;
-            --accent-light: #eef0fe;
-            --accent-mid: #c5ccfb;
-            --accent-dark: #2d45c8;
-            --success: #22c55e;
-            --success-bg: #f0fdf4;
-            --success-dark: #15803d;
-            --danger: #ef4444;
-            --danger-bg: #fef2f2;
-            --warn: #f59e0b;
-            --text-primary: #111827;
-            --text-secondary: #6b7280;
-            --text-tertiary: #9ca3af;
-            --border: rgba(0, 0, 0, 0.07);
-            --border-strong: rgba(0, 0, 0, 0.12);
-            --shadow-sm: 0 1px 3px rgba(0,0,0,0.06), 0 1px 2px rgba(0,0,0,0.04);
-            --shadow-md: 0 4px 16px rgba(0,0,0,0.07), 0 2px 4px rgba(0,0,0,0.04);
-            --shadow-accent: 0 4px 20px rgba(79, 110, 247, 0.18);
-            --radius: 14px;
-            --radius-sm: 8px;
+            --bg: #0a0d13;
+            --grid-line: rgba(255,255,255,0.025);
+            --surface: #12161f;
+            --surface-raised: #161c27;
+            --surface-tinted: #0e1219;
+            --accent: #4ee1a0;
+            --accent-glow: rgba(78, 225, 160, 0.35);
+            --accent-dim: rgba(78, 225, 160, 0.12);
+            --signal-blue: #5b9dff;
+            --signal-blue-dim: rgba(91, 157, 255, 0.12);
+            --success: #4ee1a0;
+            --success-bg: rgba(78, 225, 160, 0.1);
+            --success-dark: #4ee1a0;
+            --danger: #ff5c66;
+            --danger-bg: rgba(255, 92, 102, 0.1);
+            --warn: #ffb454;
+            --warn-bg: rgba(255, 180, 84, 0.1);
+            --text-primary: #eef1f6;
+            --text-secondary: #8993a8;
+            --text-tertiary: #4d5567;
+            --border: rgba(255, 255, 255, 0.07);
+            --border-strong: rgba(255, 255, 255, 0.14);
+            --shadow-panel: 0 1px 0 rgba(255,255,255,0.04) inset, 0 8px 24px rgba(0,0,0,0.35);
+            --shadow-panel-hover: 0 1px 0 rgba(255,255,255,0.06) inset, 0 12px 32px rgba(0,0,0,0.45);
+            --radius: 10px;
+            --radius-sm: 6px;
             --radius-pill: 100px;
+            --mono: 'IBM Plex Mono', monospace;
+            --display: 'Space Grotesk', sans-serif;
+            --body-font: 'Plus Jakarta Sans', sans-serif;
         }
         * { box-sizing: border-box; margin: 0; padding: 0; }
 
         body {
-            background: var(--bg);
+            background:
+                repeating-linear-gradient(0deg, var(--grid-line) 0px, var(--grid-line) 1px, transparent 1px, transparent 32px),
+                repeating-linear-gradient(90deg, var(--grid-line) 0px, var(--grid-line) 1px, transparent 1px, transparent 32px),
+                var(--bg);
             color: var(--text-primary);
-            font-family: 'Plus Jakarta Sans', sans-serif;
+            font-family: var(--body-font);
             min-height: 100vh;
             padding: 0;
         }
+
+        /* ── Rivet decoration for panels ── */
+        .panel-rivets::before,
+        .panel-rivets::after {
+            content: '';
+            position: absolute;
+            width: 4px; height: 4px;
+            border-radius: 50%;
+            background: var(--border-strong);
+            box-shadow: 0 1px 0 rgba(255,255,255,0.06) inset;
+        }
+        .panel-rivets::before { top: 9px; left: 9px; }
+        .panel-rivets::after  { top: 9px; right: 9px; }
 
         /* ── Top Nav Bar ── */
         .topbar {
             background: var(--surface);
             border-bottom: 1px solid var(--border);
             padding: 0 2.5rem;
-            height: 60px;
+            height: 58px;
             display: flex;
             align-items: center;
             justify-content: space-between;
             position: sticky;
             top: 0;
             z-index: 100;
-            box-shadow: var(--shadow-sm);
         }
 
         .topbar-left {
             display: flex;
             align-items: center;
-            gap: 0.75rem;
+            gap: 0.85rem;
         }
 
         .logo-mark {
-            width: 32px;
-            height: 32px;
-            background: var(--accent);
-            border-radius: 9px;
+            width: 30px;
+            height: 30px;
+            background: var(--surface-tinted);
+            border: 1px solid var(--border-strong);
+            border-radius: 7px;
             display: flex;
             align-items: center;
             justify-content: center;
-            box-shadow: var(--shadow-accent);
         }
 
-        .logo-mark svg { color: white; }
+        .logo-mark svg { color: var(--accent); }
 
         .brand-name {
-            font-family: 'Space Grotesk', sans-serif;
+            font-family: var(--display);
             font-weight: 700;
-            font-size: 1rem;
+            font-size: 0.95rem;
             color: var(--text-primary);
             letter-spacing: -0.01em;
         }
 
         .brand-divider {
             width: 1px;
-            height: 18px;
+            height: 16px;
             background: var(--border-strong);
         }
 
         .brand-section {
-            font-size: 0.8rem;
-            color: var(--text-secondary);
+            font-family: var(--mono);
+            font-size: 0.72rem;
+            color: var(--text-tertiary);
             font-weight: 500;
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
         }
 
         .topbar-right {
@@ -109,25 +130,27 @@ const systemArtc = () => {
         .live-badge {
             display: inline-flex;
             align-items: center;
-            gap: 0.4rem;
-            background: var(--success-bg);
-            border: 1px solid rgba(34, 197, 94, 0.2);
-            padding: 0.3rem 0.75rem;
+            gap: 0.5rem;
+            background: var(--surface-tinted);
+            border: 1px solid var(--border-strong);
+            padding: 0.35rem 0.8rem 0.35rem 0.65rem;
             border-radius: var(--radius-pill);
         }
 
         .live-dot {
-            width: 6px; height: 6px;
-            background: var(--success);
+            width: 7px; height: 7px;
+            background: var(--danger);
             border-radius: 50%;
-            animation: livepulse 2s infinite;
+            box-shadow: 0 0 8px 1px rgba(255, 92, 102, 0.6);
+            animation: livepulse 1.6s infinite;
         }
 
         .live-text {
-            font-size: 0.72rem;
+            font-family: var(--mono);
+            font-size: 0.7rem;
             font-weight: 600;
-            color: var(--success-dark);
-            letter-spacing: 0.06em;
+            color: var(--text-secondary);
+            letter-spacing: 0.1em;
             text-transform: uppercase;
         }
 
@@ -135,7 +158,7 @@ const systemArtc = () => {
         .page {
             max-width: 1280px;
             margin: 0 auto;
-            padding: 2rem 2.5rem 4rem;
+            padding: 2.25rem 2.5rem 4rem;
         }
 
         /* ── Page Header ── */
@@ -143,16 +166,37 @@ const systemArtc = () => {
             display: flex;
             align-items: flex-end;
             justify-content: space-between;
-            margin-bottom: 2rem;
+            margin-bottom: 1.75rem;
+            padding-bottom: 1.25rem;
+            border-bottom: 1px solid var(--border);
+        }
+
+        .page-eyebrow {
+            font-family: var(--mono);
+            font-size: 0.7rem;
+            font-weight: 600;
+            color: var(--accent);
+            letter-spacing: 0.14em;
+            text-transform: uppercase;
+            margin-bottom: 0.5rem;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .page-eyebrow::before {
+            content: '';
+            width: 14px; height: 1px;
+            background: var(--accent);
         }
 
         .page-title {
-            font-family: 'Space Grotesk', sans-serif;
-            font-size: 1.65rem;
+            font-family: var(--display);
+            font-size: 1.7rem;
             font-weight: 700;
             color: var(--text-primary);
-            letter-spacing: -0.03em;
-            margin-bottom: 0.3rem;
+            letter-spacing: -0.02em;
+            margin-bottom: 0.35rem;
         }
 
         .page-subtitle {
@@ -161,21 +205,23 @@ const systemArtc = () => {
         }
 
         .refresh-tag {
-            font-size: 0.75rem;
+            font-family: var(--mono);
+            font-size: 0.72rem;
             color: var(--text-tertiary);
             display: flex;
             align-items: center;
-            gap: 0.35rem;
+            gap: 0.5rem;
+            letter-spacing: 0.03em;
         }
 
         .refresh-tag::before {
             content: '';
-            width: 8px; height: 8px;
+            width: 9px; height: 9px;
             border: 1.5px solid var(--text-tertiary);
-            border-top-color: transparent;
+            border-top-color: var(--signal-blue);
             border-radius: 50%;
             display: inline-block;
-            animation: spin 1.5s linear infinite;
+            animation: spin 1.3s linear infinite;
         }
 
         /* ── Stat row (top KPIs) ── */
@@ -187,62 +233,84 @@ const systemArtc = () => {
         }
 
         .stat-card {
+            position: relative;
             background: var(--surface);
             border: 1px solid var(--border);
             border-radius: var(--radius);
             padding: 1.25rem 1.4rem;
-            box-shadow: var(--shadow-sm);
-            transition: box-shadow 0.2s, transform 0.2s;
+            box-shadow: var(--shadow-panel);
+            transition: box-shadow 0.2s, border-color 0.2s, transform 0.2s;
         }
 
         .stat-card:hover {
-            box-shadow: var(--shadow-md);
+            box-shadow: var(--shadow-panel-hover);
+            border-color: var(--border-strong);
             transform: translateY(-2px);
         }
 
-        .stat-icon-wrap {
-            width: 36px; height: 36px;
-            border-radius: var(--radius-sm);
+        .stat-top-row {
             display: flex;
             align-items: center;
-            justify-content: center;
+            justify-content: space-between;
             margin-bottom: 0.9rem;
         }
 
-        .stat-icon-wrap.blue  { background: var(--accent-light); color: var(--accent); }
-        .stat-icon-wrap.green { background: var(--success-bg);   color: var(--success-dark); }
-        .stat-icon-wrap.red   { background: var(--danger-bg);    color: var(--danger); }
-        .stat-icon-wrap.amber { background: #fffbeb;             color: #92400e; }
+        .stat-icon-wrap {
+            width: 32px; height: 32px;
+            border-radius: var(--radius-sm);
+            border: 1px solid var(--border-strong);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: var(--surface-tinted);
+        }
+
+        .stat-icon-wrap.blue  { color: var(--signal-blue); }
+        .stat-icon-wrap.green { color: var(--success); }
+        .stat-icon-wrap.red   { color: var(--danger); }
+        .stat-icon-wrap.amber { color: var(--warn); }
+
+        .stat-led {
+            width: 6px; height: 6px;
+            border-radius: 50%;
+        }
+        .stat-led.blue  { background: var(--signal-blue); box-shadow: 0 0 6px 1px var(--signal-blue-dim); }
+        .stat-led.green { background: var(--success); box-shadow: 0 0 6px 1px var(--accent-glow); }
+        .stat-led.red   { background: var(--danger); box-shadow: 0 0 6px 1px rgba(255,92,102,0.4); }
+        .stat-led.amber { background: var(--warn); box-shadow: 0 0 6px 1px rgba(255,180,84,0.4); }
 
         .stat-label {
-            font-size: 0.74rem;
+            font-family: var(--mono);
+            font-size: 0.68rem;
             font-weight: 600;
-            color: var(--text-secondary);
-            letter-spacing: 0.05em;
+            color: var(--text-tertiary);
+            letter-spacing: 0.09em;
             text-transform: uppercase;
-            margin-bottom: 0.35rem;
+            margin-bottom: 0.4rem;
         }
 
         .stat-value {
-            font-family: 'Space Grotesk', sans-serif;
-            font-size: 1.7rem;
-            font-weight: 700;
+            font-family: var(--mono);
+            font-size: 1.6rem;
+            font-weight: 600;
             color: var(--text-primary);
-            letter-spacing: -0.04em;
+            letter-spacing: -0.01em;
             line-height: 1;
         }
 
         .stat-meta {
-            font-size: 0.78rem;
+            font-family: var(--mono);
+            font-size: 0.74rem;
             color: var(--text-tertiary);
-            margin-top: 0.3rem;
+            margin-top: 0.4rem;
         }
 
         /* ── Progress bar ── */
         .prog-track {
             width: 100%;
-            height: 4px;
-            background: var(--border);
+            height: 3px;
+            background: var(--surface-tinted);
+            border: 1px solid var(--border);
             border-radius: 2px;
             margin-top: 0.9rem;
             overflow: hidden;
@@ -250,8 +318,8 @@ const systemArtc = () => {
 
         .prog-fill {
             height: 100%;
-            border-radius: 2px;
-            background: var(--accent);
+            background: var(--signal-blue);
+            box-shadow: 0 0 6px var(--signal-blue-dim);
             width: 0%;
             transition: width 0.9s cubic-bezier(0.4, 0, 0.2, 1);
         }
@@ -265,16 +333,18 @@ const systemArtc = () => {
 
         /* ── Card ── */
         .card {
+            position: relative;
             background: var(--surface);
             border: 1px solid var(--border);
             border-radius: var(--radius);
             padding: 1.4rem 1.5rem;
-            box-shadow: var(--shadow-sm);
-            transition: box-shadow 0.2s, transform 0.2s;
+            box-shadow: var(--shadow-panel);
+            transition: box-shadow 0.2s, border-color 0.2s, transform 0.2s;
         }
 
         .card:hover {
-            box-shadow: var(--shadow-md);
+            box-shadow: var(--shadow-panel-hover);
+            border-color: var(--border-strong);
             transform: translateY(-2px);
         }
 
@@ -282,21 +352,22 @@ const systemArtc = () => {
             display: flex;
             align-items: center;
             justify-content: space-between;
-            margin-bottom: 1.1rem;
+            margin-bottom: 1.15rem;
         }
 
         .card-title {
-            font-size: 0.78rem;
-            font-weight: 700;
-            letter-spacing: 0.06em;
+            font-family: var(--mono);
+            font-size: 0.7rem;
+            font-weight: 600;
+            letter-spacing: 0.09em;
             text-transform: uppercase;
-            color: var(--text-secondary);
+            color: var(--text-tertiary);
         }
 
         .card-icon {
-            width: 32px; height: 32px;
+            width: 30px; height: 30px;
             background: var(--surface-tinted);
-            border: 1px solid var(--border);
+            border: 1px solid var(--border-strong);
             border-radius: var(--radius-sm);
             display: flex;
             align-items: center;
@@ -311,9 +382,9 @@ const systemArtc = () => {
             display: flex;
             align-items: center;
             justify-content: space-between;
-            padding: 0.65rem 0;
-            border-bottom: 1px solid var(--border);
-            font-size: 0.87rem;
+            padding: 0.7rem 0;
+            border-bottom: 1px dashed var(--border);
+            font-size: 0.85rem;
         }
 
         .row-item:last-child { border-bottom: none; padding-bottom: 0; }
@@ -322,13 +393,14 @@ const systemArtc = () => {
         .row-label { color: var(--text-secondary); }
 
         .row-val {
-            font-family: 'Space Grotesk', sans-serif;
+            font-family: var(--mono);
             font-weight: 600;
             color: var(--text-primary);
+            font-size: 0.9rem;
         }
 
-        .row-val.accent { color: var(--accent); }
-        .row-val.success { color: var(--success-dark); }
+        .row-val.accent { color: var(--signal-blue); }
+        .row-val.success { color: var(--success); }
 
         /* ── Health matrix (full width) ── */
         .full-width { grid-column: 1 / -1; }
@@ -341,64 +413,109 @@ const systemArtc = () => {
         }
 
         .health-cell {
+            position: relative;
             background: var(--surface-tinted);
             border: 1px solid var(--border);
             border-radius: var(--radius-sm);
-            padding: 1.25rem;
+            padding: 1.4rem 1.25rem;
             text-align: center;
+            overflow: hidden;
+        }
+
+        .health-cell::before {
+            content: '';
+            position: absolute;
+            top: 0; left: 0; right: 0;
+            height: 2px;
+            background: currentColor;
+            opacity: 0.5;
         }
 
         .health-cell-label {
-            font-size: 0.72rem;
-            font-weight: 700;
-            letter-spacing: 0.07em;
+            font-family: var(--mono);
+            font-size: 0.68rem;
+            font-weight: 600;
+            letter-spacing: 0.09em;
             text-transform: uppercase;
             color: var(--text-tertiary);
-            margin-bottom: 0.55rem;
+            margin-bottom: 0.6rem;
         }
 
         .health-cell-val {
-            font-family: 'Space Grotesk', sans-serif;
-            font-size: 2rem;
-            font-weight: 700;
-            letter-spacing: -0.04em;
+            font-family: var(--mono);
+            font-size: 1.9rem;
+            font-weight: 600;
+            letter-spacing: -0.02em;
             line-height: 1;
         }
 
-        .health-cell-val.accent  { color: var(--accent); }
-        .health-cell-val.success { color: var(--success-dark); }
+        .health-cell-val.accent  { color: var(--signal-blue); }
+        .health-cell-val.success { color: var(--success); }
         .health-cell-val.danger  { color: var(--danger); }
+        .health-cell.accent  { color: var(--signal-blue); }
+        .health-cell.success { color: var(--success); }
+        .health-cell.danger  { color: var(--danger); }
 
         /* ── Accent card (CPU) ── */
         .card-accent {
-            background: var(--accent);
-            border: none;
-            color: white;
+            background:
+                radial-gradient(circle at 85% -10%, rgba(78,225,160,0.16), transparent 55%),
+                var(--surface-raised);
+            border: 1px solid var(--border-strong);
         }
 
-        .card-accent .card-title { color: rgba(255,255,255,0.7); }
-        .card-accent .card-icon { background: rgba(255,255,255,0.15); border-color: rgba(255,255,255,0.2); color: white; }
-        .card-accent .stat-value { color: white; font-size: 2.2rem; }
-        .card-accent .stat-meta { color: rgba(255,255,255,0.6); }
+        .card-accent .card-title { color: var(--accent); opacity: 0.85; }
+        .card-accent .card-icon { background: var(--accent-dim); border-color: rgba(78,225,160,0.3); color: var(--accent); }
+
+        .cpu-readout {
+            display: flex;
+            align-items: baseline;
+            gap: 0.5rem;
+            margin-bottom: 0.5rem;
+        }
+
+        .cpu-readout .stat-value {
+            font-size: 2.9rem;
+            font-weight: 700;
+            color: var(--text-primary);
+        }
+
+        .cpu-unit {
+            font-family: var(--mono);
+            font-size: 0.85rem;
+            color: var(--text-tertiary);
+        }
+
+        .card-accent .stat-meta {
+            font-family: var(--mono);
+            font-size: 0.78rem;
+            color: var(--text-secondary);
+        }
 
         /* ── Footer ── */
         footer {
             text-align: center;
             margin-top: 3rem;
-            font-size: 0.76rem;
+            font-family: var(--mono);
+            font-size: 0.7rem;
             color: var(--text-tertiary);
-            letter-spacing: 0.04em;
+            letter-spacing: 0.06em;
+            text-transform: uppercase;
         }
 
         /* ── Animations ── */
         @keyframes livepulse {
             0%   { opacity: 1;   transform: scale(1);    }
-            50%  { opacity: 0.5; transform: scale(1.3);  }
+            50%  { opacity: 0.4; transform: scale(1.3);  }
             100% { opacity: 1;   transform: scale(1);    }
         }
 
         @keyframes spin {
             to { transform: rotate(360deg); }
+        }
+
+        @media (prefers-reduced-motion: reduce) {
+            .live-dot, .refresh-tag::before { animation: none; }
         }
 
         @media (max-width: 900px) {
@@ -421,18 +538,18 @@ const systemArtc = () => {
     <nav class="topbar">
         <div class="topbar-left">
             <div class="logo-mark">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
                     <path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/>
                 </svg>
             </div>
             <span class="brand-name">Service Booking</span>
             <div class="brand-divider"></div>
-            <span class="brand-section">System Telemetry</span>
+            <span class="brand-section">SYS // TELEMETRY</span>
         </div>
         <div class="topbar-right">
             <div class="live-badge">
                 <div class="live-dot"></div>
-                <span class="live-text">Live</span>
+                <span class="live-text">Rec · Live</span>
             </div>
         </div>
     </nav>
@@ -442,18 +559,22 @@ const systemArtc = () => {
 
         <div class="page-header">
             <div>
-                <div class="page-title">Real-Time Diagnostics</div>
+                <div class="page-eyebrow">Diagnostics Console</div>
+                <div class="page-title">Real-Time System Readout</div>
                 <div class="page-subtitle">System health and performance — auto-refreshing every 3 seconds</div>
             </div>
-            <div class="refresh-tag">Syncing metrics...</div>
+            <div class="refresh-tag">Syncing metrics</div>
         </div>
 
         <!-- Top KPI row -->
         <div class="stat-row">
 
-            <div class="stat-card">
-                <div class="stat-icon-wrap blue">
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="2" width="20" height="8" rx="2"></rect><rect x="2" y="14" width="20" height="8" rx="2"></rect><line x1="6" y1="6" x2="6.01" y2="6"></line><line x1="6" y1="18" x2="6.01" y2="18"></line></svg>
+            <div class="stat-card panel-rivets">
+                <div class="stat-top-row">
+                    <div class="stat-icon-wrap blue">
+                        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="2" width="20" height="8" rx="2"></rect><rect x="2" y="14" width="20" height="8" rx="2"></rect><line x1="6" y1="6" x2="6.01" y2="6"></line><line x1="6" y1="18" x2="6.01" y2="18"></line></svg>
+                    </div>
+                    <div class="stat-led blue"></div>
                 </div>
                 <div class="stat-label">RAM Used</div>
                 <div class="stat-value" id="ram-val">—</div>
@@ -461,28 +582,37 @@ const systemArtc = () => {
                 <div class="prog-track"><div class="prog-fill" id="ram-bar"></div></div>
             </div>
 
-            <div class="stat-card">
-                <div class="stat-icon-wrap amber">
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="12" cy="5" rx="9" ry="3"></ellipse><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"></path><path d="M3 12c0 1.66 4 3 9 3s9-1.34 9-3"></path></svg>
+            <div class="stat-card panel-rivets">
+                <div class="stat-top-row">
+                    <div class="stat-icon-wrap amber">
+                        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="12" cy="5" rx="9" ry="3"></ellipse><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"></path><path d="M3 12c0 1.66 4 3 9 3s9-1.34 9-3"></path></svg>
+                    </div>
+                    <div class="stat-led amber"></div>
                 </div>
                 <div class="stat-label">Disk Used</div>
                 <div class="stat-value" id="storage-val">—</div>
                 <div class="stat-meta" id="storage-sub">Loading…</div>
-                <div class="prog-track"><div class="prog-fill" id="storage-bar" style="background: var(--warn);"></div></div>
+                <div class="prog-track"><div class="prog-fill" id="storage-bar" style="background: var(--warn); box-shadow: 0 0 6px var(--warn-bg);"></div></div>
             </div>
 
-            <div class="stat-card">
-                <div class="stat-icon-wrap green">
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg>
+            <div class="stat-card panel-rivets">
+                <div class="stat-top-row">
+                    <div class="stat-icon-wrap green">
+                        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg>
+                    </div>
+                    <div class="stat-led green"></div>
                 </div>
                 <div class="stat-label">Total Users</div>
                 <div class="stat-value" id="users-total">—</div>
                 <div class="stat-meta" id="users-active-meta">— verified active</div>
             </div>
 
-            <div class="stat-card">
-                <div class="stat-icon-wrap red">
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 12h-4l-3 9L9 3l-3 9H2"></path></svg>
+            <div class="stat-card panel-rivets">
+                <div class="stat-top-row">
+                    <div class="stat-icon-wrap red">
+                        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 12h-4l-3 9L9 3l-3 9H2"></path></svg>
+                    </div>
+                    <div class="stat-led red"></div>
                 </div>
                 <div class="stat-label">Requests / min</div>
                 <div class="stat-value" id="hits-min">—</div>
@@ -495,19 +625,22 @@ const systemArtc = () => {
         <div class="main-grid">
 
             <!-- CPU — accent card -->
-            <div class="card card-accent">
+            <div class="card card-accent panel-rivets">
                 <div class="card-header">
                     <div class="card-title">Processor Load</div>
                     <div class="card-icon">
                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="4" width="16" height="16" rx="2"></rect><rect x="9" y="9" width="6" height="6"></rect><line x1="9" y1="1" x2="9" y2="4"></line><line x1="15" y1="1" x2="15" y2="4"></line><line x1="9" y1="20" x2="9" y2="23"></line><line x1="15" y1="20" x2="15" y2="23"></line><line x1="20" y1="9" x2="23" y2="9"></line><line x1="20" y1="15" x2="23" y2="15"></line><line x1="1" y1="9" x2="4" y2="9"></line><line x1="1" y1="15" x2="4" y2="15"></line></svg>
                     </div>
                 </div>
-                <div class="stat-value" id="cpu-val" style="font-family:'Space Grotesk',sans-serif;font-size:2.8rem;font-weight:700;letter-spacing:-0.05em;margin-bottom:0.4rem;color:white;">—</div>
-                <div class="stat-meta" id="cpu-sub" style="font-size:0.82rem;color:rgba(255,255,255,0.6);">Loading…</div>
+                <div class="cpu-readout">
+                    <div class="stat-value" id="cpu-val">—</div>
+                    <span class="cpu-unit">load avg / 1m</span>
+                </div>
+                <div class="stat-meta" id="cpu-sub">Loading…</div>
             </div>
 
             <!-- Server Specs -->
-            <div class="card">
+            <div class="card panel-rivets">
                 <div class="card-header">
                     <div class="card-title">Server Specs</div>
                     <div class="card-icon">
@@ -527,7 +660,7 @@ const systemArtc = () => {
             </div>
 
             <!-- Users -->
-            <div class="card">
+            <div class="card panel-rivets">
                 <div class="card-header">
                     <div class="card-title">User Accounts</div>
                     <div class="card-icon">
@@ -547,7 +680,7 @@ const systemArtc = () => {
             </div>
 
             <!-- API Traffic -->
-            <div class="card">
+            <div class="card panel-rivets">
                 <div class="card-header">
                     <div class="card-title">API Traffic</div>
                     <div class="card-icon">
@@ -567,7 +700,7 @@ const systemArtc = () => {
             </div>
 
             <!-- Health Matrix -->
-            <div class="card full-width">
+            <div class="card full-width panel-rivets">
                 <div class="card-header">
                     <div class="card-title">API Health Matrix</div>
                     <div class="card-icon">
@@ -575,15 +708,15 @@ const systemArtc = () => {
                     </div>
                 </div>
                 <div class="health-grid">
-                    <div class="health-cell">
+                    <div class="health-cell accent">
                         <div class="health-cell-label">Avg Latency</div>
                         <div class="health-cell-val accent" id="health-latency">— ms</div>
                     </div>
-                    <div class="health-cell">
+                    <div class="health-cell success">
                         <div class="health-cell-label">Success Rate</div>
                         <div class="health-cell-val success" id="health-success">—%</div>
                     </div>
-                    <div class="health-cell">
+                    <div class="health-cell danger">
                         <div class="health-cell-label">Error Count</div>
                         <div class="health-cell-val danger" id="health-errors">—</div>
                     </div>
