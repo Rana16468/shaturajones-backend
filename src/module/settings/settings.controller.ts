@@ -6,7 +6,6 @@ import SettingServices from "./settings.services";
 import catchAsync from "../../utility/catchAsync";
 import sendRespone from "../../utility/sendRespone";
 
-
 const updateAboutUs: RequestHandler = catchAsync(async (req, res) => {
   const result = await SettingServices.updateAboutUsIntoDb(req.body);
 
@@ -68,6 +67,26 @@ const findByTermsConditions: RequestHandler = catchAsync(async (req, res) => {
   });
 });
 
+const updateSupportEmail: RequestHandler = catchAsync(async (req, res) => {
+  const result = await SettingServices.updateSupportEmailIntoDb(req.body);
+  sendRespone(res, {
+    success: true,
+    statusCode: httpStatus.OK,
+    message: "Successfully Updated Support Email",
+    data: result,
+  });
+});
+
+const findBySupportEmail: RequestHandler = catchAsync(async (req, res) => {
+  const result = await SettingServices.findBySupportEmailIntoDb();
+  sendRespone(res, {
+    success: true,
+    statusCode: httpStatus.OK,
+    message: "Successfully Found Support Email",
+    data: result,
+  });
+});
+
 const SettingController = {
   updateAboutUs,
   findByAboutUs,
@@ -75,6 +94,8 @@ const SettingController = {
   findByPrivacyPolicyss,
   termsConditions,
   findByTermsConditions,
+  updateSupportEmail,
+  findBySupportEmail,
 };
 
 export default SettingController;

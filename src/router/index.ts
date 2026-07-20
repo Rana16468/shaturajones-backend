@@ -13,30 +13,25 @@ import { RatingReviewRoutes } from '../module/ratingReview/ratingReview.route';
 import { conversationRoutes } from '../module/conversation/conversation.route';
 import messageRoutes from '../module/message/message.routes';
 import { CategoryRouter } from '../module/category/category.route';
+import reportRoutes from '../module/report/report.routes';
 
 const router = express.Router();
 const moduleRouter = [
   { path: '/contract', route: ContructRouter },
   { path: '/user', route: UserRouters },
-  {path:"/auth", route: AuthRouter},
-  {path:"/setting", route: SettingsRoutes},
-  {path:"/jobs", route: CreateJobsRouter},
-  {path:"/services", route: ServicesRouter},
-  {path:"/notifications", route: NotificationRoute},
-  {path:"/payment_gateway", route: PaymentGatewayRoutes},
-  {path:"/distribution_jobs", route: cleanerDistributionRouter},
-  {path:"/work_progress", route: WorkProgressRouter},
-  {path:"/rating_review", route: RatingReviewRoutes},
-  
-   {
-    path:"/conversation", route:  conversationRoutes
-  },
-  {
-    path:"/message", route: messageRoutes
-  },
-  {
-    path: "/category", route: CategoryRouter
-  },
+  { path: '/auth', route: AuthRouter },
+  { path: '/setting', route: SettingsRoutes },
+  { path: '/jobs', route: CreateJobsRouter },
+  { path: '/services', route: ServicesRouter },
+  { path: '/notifications', route: NotificationRoute },
+  { path: '/payment_gateway', route: PaymentGatewayRoutes },
+  { path: '/distribution_jobs', route: cleanerDistributionRouter },
+  { path: '/work_progress', route: WorkProgressRouter },
+  { path: '/rating_review', route: RatingReviewRoutes },
+  { path: '/conversation', route: conversationRoutes },
+  { path: '/message', route: messageRoutes },
+  { path: '/category', route: CategoryRouter },
+  { path: '/report', route: reportRoutes },
 ];
 
 moduleRouter.forEach((v) => router.use(v.path, v.route));

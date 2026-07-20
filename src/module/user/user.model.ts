@@ -157,6 +157,11 @@ const UserSchema = new Schema<TUser, UserModel>(
       default: null,
     },
 
+    fines: {
+      type: Number,
+      default: 0
+    },
+
     isDelete: {
       type: Boolean,
       default: false,

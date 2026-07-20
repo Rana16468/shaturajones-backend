@@ -6,7 +6,6 @@ import auth from "../../middleware/auth";
 import { USER_ROLE } from "../user/user.constant";
 import validationRequest from "../../middleware/validationRequest";
 
-
 const routes = express.Router();
 
 routes.post(
@@ -36,6 +35,13 @@ routes.get(
   "/find_by_terms_conditions",
   SettingController.findByTermsConditions,
 );
+
+routes.post(
+  "/support_email",
+  auth(USER_ROLE.admin, USER_ROLE.superAdmin),
+  SettingController.updateSupportEmail,
+);
+routes.get("/find_by_support_email", SettingController.findBySupportEmail);
 
 const SettingsRoutes = routes;
 

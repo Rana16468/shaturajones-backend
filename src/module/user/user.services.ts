@@ -15,6 +15,8 @@ import config from '../../app/config';
 import { USER_ACCESSIBILITY } from './user.constant';
 import emailContext from '../../utility/emailcontext/sendvarificationData';
 import { cache } from '../createJobs/createJobs.constant';
+import deleteFileFromCloudinary from '../../utility/Cloudinary/deleteFileFromCloudinary';
+import { sendFileToCloudinary } from '../../utility/Cloudinary/sendFileToCloudinary';
 
 const updateFcmTokenIntoDb = async (userId: string, fcmToken: string) => {
   const result = await users.findByIdAndUpdate(
@@ -732,19 +734,7 @@ const userOverViewIntoDb=async(userId: string)=>{
 };
 
 
-const deleteFileIfExists = (filePath?: string) => {
-  if (!filePath) return;
 
-  const fullPath = path.join(process.cwd(), filePath);
-
-  if (fs.existsSync(fullPath)) {
-    try {
-      fs.unlinkSync(fullPath);
-    } catch (err) {
-      console.warn("Failed to delete file:", err);
-    }
-  }
-};
 
 const updateCareerOverviewIntoDb = async (
   userId: string,
@@ -755,17 +745,14 @@ const updateCareerOverviewIntoDb = async (
       throw new ApiError(httpStatus.BAD_REQUEST, 'Invalid user ID', '');
     }
 
+   
     const existing = await users.findById(userId).lean();
-
     if (!existing) {
       throw new ApiError(httpStatus.NOT_FOUND, 'User not found', '');
     }
 
-    const updateData: any = {};
+    const updateData: Partial<TUser> = {};
 
-    // -------------------------
-    // Basic Info
-    // -------------------------
     if (payload.name) updateData.name = payload.name.trim();
     if (payload.email) updateData.email = payload.email.trim();
     if (payload.phoneNumber) updateData.phoneNumber = payload.phoneNumber;
@@ -773,15 +760,18 @@ const updateCareerOverviewIntoDb = async (
     if (payload.country) updateData.country = payload.country;
     if (payload.location) updateData.location = payload.location;
 
-    // -------------------------
-    // Photo (with cleanup)
-    // -------------------------
+  
     if (payload.photo) {
-      updateData.photo = payload.photo;
 
       if (existing.photo) {
-        deleteFileIfExists(existing.photo);
+        await deleteFileFromCloudinary(existing.photo);
+  
       }
+
+      const fileName = `${Date.now()}-photo`;
+      const uploaded = await sendFileToCloudinary(fileName, payload.photo);
+      
+      updateData.photo = uploaded.secure_url;
     }
 
   
@@ -804,8 +794,8 @@ const updateCareerOverviewIntoDb = async (
 
     return {
       status: true,
-      message: 'Career overview updated successfully'
-     
+      message: 'Career overview updated successfully',
+      
     };
   } catch (error) {
     throw catchError(error);

@@ -29,7 +29,18 @@ export interface TServices {
     isServiceEed: boolean;
     isAdvancePayment: boolean;
     isCompletePayment: boolean;
+    isCompletionRequested?: boolean;
+    isExtensionRequested?: boolean;
+    extensionDuration?: string;
     totalAmount: number;
+    stripeCustomerId?: string;
+    stripePaymentMethodId?: string;
+    cleanerPayout?: number;
+    adminCommission?: number;
+    cleaningType?: string;
+    duration?: number;
+    specialInstructions?: string;
+    location?: string;
     isDelete: boolean;
 }
 

@@ -2,9 +2,11 @@ import { Schema, model } from "mongoose";
 import {
   AboutModel,
   PrivacyPolicyModel,
+  SupportEmailModel,
   TAboutUs,
   TermsConditionsModel,
   TPrivacyPolicy,
+  TSupportEmail,
   TTermsConditions,
 } from "./settings.interface";
 
@@ -23,6 +25,7 @@ const AboutUsSchema = new Schema<TAboutUs, AboutModel>(
     timestamps: true,
   },
 );
+
 const PrivacyPolicySchema = new Schema<TPrivacyPolicy, PrivacyPolicyModel>(
   {
     PrivacyPolicy: {
@@ -44,6 +47,22 @@ const TermsConditionSchema = new Schema<TTermsConditions, TermsConditionsModel>(
     TermsConditions: {
       type: String,
       required: [true, "TermsConditionsy content is required"],
+    },
+    isDelete: {
+      type: Boolean,
+      default: false,
+    },
+  },
+  {
+    timestamps: true,
+  },
+);
+
+const SupportEmailSchema = new Schema<TSupportEmail, SupportEmailModel>(
+  {
+    supportEmail: {
+      type: String,
+      required: [true, "Support Email is required"],
     },
     isDelete: {
       type: Boolean,
@@ -78,10 +97,6 @@ AboutUsSchema.pre("findOne", function (next) {
   this.findOne({ isDelete: { $ne: true } });
   next();
 });
-AboutUsSchema.pre("aggregate", function (next) {
-  this.pipeline().unshift({ $match: { isDelete: { $ne: true } } });
-  next();
-});
 
 PrivacyPolicySchema.pre("find", function (next) {
   this.find({ isDelete: { $ne: true } });
@@ -89,10 +104,6 @@ PrivacyPolicySchema.pre("find", function (next) {
 });
 PrivacyPolicySchema.pre("findOne", function (next) {
   this.findOne({ isDelete: { $ne: true } });
-  next();
-});
-PrivacyPolicySchema.pre("aggregate", function (next) {
-  this.pipeline().unshift({ $match: { isDelete: { $ne: true } } });
   next();
 });
 
@@ -104,8 +115,13 @@ TermsConditionSchema.pre("findOne", function (next) {
   this.findOne({ isDelete: { $ne: true } });
   next();
 });
-TermsConditionSchema.pre("aggregate", function (next) {
-  this.pipeline().unshift({ $match: { isDelete: { $ne: true } } });
+
+SupportEmailSchema.pre("find", function (next) {
+  this.find({ isDelete: { $ne: true } });
+  next();
+});
+SupportEmailSchema.pre("findOne", function (next) {
+  this.findOne({ isDelete: { $ne: true } });
   next();
 });
 
@@ -118,4 +134,9 @@ export const privacypolicys = model<TPrivacyPolicy, PrivacyPolicyModel>(
 export const termsConditions = model<TTermsConditions, TermsConditionsModel>(
   " termsConditions",
   TermsConditionSchema,
+);
+
+export const supportEmailModel = model<TSupportEmail, SupportEmailModel>(
+  "supportEmail",
+  SupportEmailSchema,
 );

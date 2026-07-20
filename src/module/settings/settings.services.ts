@@ -2,12 +2,11 @@ import httpStatus from "http-status";
 import {
   TAboutUs,
   TPrivacyPolicy,
+  TSupportEmail,
   TTermsConditions,
 } from "./settings.interface";
-import { aboutus, privacypolicys, termsConditions } from "./settings.modal";
+import { aboutus, privacypolicys, supportEmailModel, termsConditions } from "./settings.modal";
 import catchError from "../../app/error/catchError";
-
-
 
 const updateAboutUsIntoDb = async (payload: TAboutUs) => {
   try {
@@ -27,7 +26,7 @@ const updateAboutUsIntoDb = async (payload: TAboutUs) => {
       ? { status: true, message: "AboutUs successfully saved" }
       : { status: false, message: "Failed to save AboutUs" };
   } catch (error) {
-      catchError(error)
+    catchError(error);
   }
 };
 
@@ -39,7 +38,7 @@ const findByAboutUsIntoDb = async () => {
 
     return result;
   } catch (error: any) {
-     catchError(error)
+    catchError(error);
   }
 };
 
@@ -65,7 +64,7 @@ const privacyPolicysIntoDb = async (payload: TPrivacyPolicy) => {
       ? { status: true, message: "Privacy policy successfully saved" }
       : { status: false, message: "Failed to save privacy policy" };
   } catch (error) {
-     catchError(error)
+    catchError(error);
   }
 };
 
@@ -77,11 +76,9 @@ const findByPrivacyPolicyssIntoDb = async () => {
 
     return result;
   } catch (error) {
-    catchError(error)
+    catchError(error);
   }
 };
-
-// termsConditions
 
 const termsConditionsIntoDb = async (payload: TTermsConditions) => {
   try {
@@ -108,7 +105,7 @@ const termsConditionsIntoDb = async (payload: TTermsConditions) => {
       ? { status: true, message: "Terms and Conditions successfully saved" }
       : { status: false, message: "Failed to save Terms and Conditions" };
   } catch (error) {
-    catchError(error)
+    catchError(error);
   }
 };
 
@@ -120,7 +117,42 @@ const findBytermsConditionsIntoDb = async () => {
 
     return result;
   } catch (error) {
-    catchError(error)
+    catchError(error);
+  }
+};
+
+const updateSupportEmailIntoDb = async (payload: TSupportEmail) => {
+  try {
+    const emailText = payload.supportEmail?.trim() ?? "";
+
+    if (!emailText) {
+      await supportEmailModel.deleteMany();
+      return { status: true, message: "Support email cleared successfully" };
+    }
+
+    const result = await supportEmailModel.findOneAndUpdate(
+      {},
+      { supportEmail: emailText, isDelete: payload.isDelete ?? false },
+      { new: true, upsert: true, setDefaultsOnInsert: true },
+    );
+
+    return result
+      ? { status: true, message: "Support email successfully saved", data: result }
+      : { status: false, message: "Failed to save support email" };
+  } catch (error) {
+    catchError(error);
+  }
+};
+
+const findBySupportEmailIntoDb = async () => {
+  try {
+    const result = await supportEmailModel
+      .findOne()
+      .select("-isDelete -createdAt -updatedAt");
+
+    return result || { supportEmail: "support@shaturajones.com" };
+  } catch (error) {
+    catchError(error);
   }
 };
 
@@ -131,6 +163,8 @@ const SettingServices = {
   findByPrivacyPolicyssIntoDb,
   termsConditionsIntoDb,
   findBytermsConditionsIntoDb,
+  updateSupportEmailIntoDb,
+  findBySupportEmailIntoDb,
 };
 
 export default SettingServices;

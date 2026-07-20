@@ -127,12 +127,68 @@ const ServicesSchema = new Schema<TServices, ServicesModel>(
       index: true,
       default: false,
     },
+
+    isCompletionRequested: {
+      type: Boolean,
+      default: false,
+    },
+
+    isExtensionRequested: {
+      type: Boolean,
+      default: false,
+    },
+
+    extensionDuration: {
+      type: String,
+      default: "",
+    },
+
     totalAmount:{
 
         type: Number,
         required: true , 
         default: 0.00
 
+    },
+
+    stripeCustomerId: {
+      type: String,
+      default: "",
+    },
+
+    stripePaymentMethodId: {
+      type: String,
+      default: "",
+    },
+
+    cleanerPayout: {
+      type: Number,
+      default: 0.00,
+    },
+
+    adminCommission: {
+      type: Number,
+      default: 0.00,
+    },
+
+    cleaningType: {
+      type: String,
+      default: "",
+    },
+
+    duration: {
+      type: Number,
+      default: 0,
+    },
+
+    specialInstructions: {
+      type: String,
+      default: null,
+    },
+
+    location: {
+      type: String,
+      default: null,
     },
 
     isDelete: {

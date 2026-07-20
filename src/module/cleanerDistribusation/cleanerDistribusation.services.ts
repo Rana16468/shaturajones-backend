@@ -81,6 +81,11 @@ const isAcceptedJobOfferIntoDb = async (
                 type: "service",
                 timestamp: new Date().toISOString(),
             });
+
+            // Broadcast that the job is accepted so other providers can remove it instantly
+            io.emit("job-accepted", {
+                serviceId: acceptedService._id.toString(),
+            });
         } catch {
             console.log("Socket not initialized.");
         }
@@ -248,6 +253,9 @@ const findByAllServicesIntoDb = async (
             isServiceStarted: "$service.isServiceStarted",
             isServiceEed: "$service.isServiceEed",
             totalAmount: "$service.totalAmount",
+            cleanerPayout: "$service.cleanerPayout",
+            cleaningType: "$service.cleaningType",
+            duration: "$service.duration",
           },
         },
       },
@@ -351,6 +359,7 @@ const deleteJobOfferIntoDb = async (
         },
         {
           userId: 1,
+          selectedDate: 1,
         }
       )
       .session(session);
@@ -361,6 +370,20 @@ const deleteJobOfferIntoDb = async (
         "Service not found or already cancelled.",
         ""
       );
+    }
+
+    // Apply a fine of $10 if cleaner cancels less than 3 hours before the scheduled time
+    if (service.selectedDate) {
+      const scheduledTime = new Date(service.selectedDate).getTime();
+      const currentTime = new Date().getTime();
+      const threeHoursInMs = 3 * 60 * 60 * 1000;
+      if (scheduledTime - currentTime < threeHoursInMs) {
+        await users.findByIdAndUpdate(
+          cleanerId,
+          { $inc: { fines: 10 } },
+          { session }
+        );
+      }
     }
 
     // Reset service status
@@ -455,7 +478,7 @@ const findMyAcceptedJobListIntoDb = async (
               isDelete: false,
             },
             select:
-              "addJobsPackages jobId selectedDate isAccepted isServiceStarted isServiceEed isAdvancePayment isCompletePayment totalAmount userId",
+              "addJobsPackages jobId selectedDate isAccepted isServiceStarted isServiceEed isAdvancePayment isCompletePayment totalAmount cleanerPayout cleaningType duration userId",
             populate: [
               {
                 path: "jobId",
@@ -496,128 +519,93 @@ const findMyAcceptedJobListIntoDb = async (
   }
 };
 
-const cleanerCompletedJobGraphIntoDb=async(query: { year?: string })=>{
-  try{
+const cleanerCompletedJobGraphIntoDb = async (query: { year?: string }, userId: string) => {
+  try {
+    const today = new Date();
+    const dayOfWeek = today.getDay();
 
-     const year = query.year ? parseInt(query.year) : new Date().getFullYear();
-    
-        const cacheKey = `user_growth_${year}`;
-    
-        const cachedData = cache.get(cacheKey);
-        if (cachedData) {
-          return cachedData;
-        }
-    
-        const previousYear = year - 1;
-    
-        const currentYearStats = await cleanerdistributions.aggregate([
-          {
-            $match: {
-              createdAt: {
-                $gte: new Date(`${year}-01-01T00:00:00.000Z`),
-                $lte: new Date(`${year}-12-31T23:59:59.999Z`),
-              },
-            },
-          },
-          {
-            $group: {
-              _id: { month: { $month: "$createdAt" } },
-              count: { $sum: 1 },
-            },
-          },
-          {
-            $project: {
-              month: "$_id.month",
-              count: 1,
-              _id: 0,
-            },
-          },
-          {
-            $group: {
-              _id: null,
-              totalCount: { $sum: "$count" },
-              data: { $push: { month: "$month", count: "$count" } },
-            },
-          },
-          {
-            $project: {
-              totalCount: 1,
-              months: {
-                $map: {
-                  input: { $range: [1, 13] },
-                  as: "m",
-                  in: {
-                    year,
-                    month: "$$m",
-                    count: {
-                      $let: {
-                        vars: {
-                          matched: {
-                            $arrayElemAt: [
-                              {
-                                $filter: {
-                                  input: "$data",
-                                  as: "d",
-                                  cond: { $eq: ["$$d.month", "$$m"] },
-                                },
-                              },
-                              0,
-                            ],
-                          },
-                        },
-                        in: { $ifNull: ["$$matched.count", 0] },
-                      },
-                    },
-                  },
-                },
-              },
-            },
-          },
-        ]);
-    
-        const previousYearStats = await cleanerdistributions.aggregate([
-          {
-            $match: {
-              createdAt: {
-                $gte: new Date(`${previousYear}-01-01T00:00:00.000Z`),
-                $lte: new Date(`${previousYear}-12-31T23:59:59.999Z`),
-              },
-            },
-          },
-          {
-            $count: "totalCount",
-          },
-        ]);
-    
-        const currentYearTotal = currentYearStats[0]?.totalCount || 0;
-        const previousYearTotal = previousYearStats[0]?.totalCount || 0;
-    
-        let yearlyGrowth = 0;
-    
-        if (previousYearTotal > 0) {
-          yearlyGrowth =
-            ((currentYearTotal - previousYearTotal) / previousYearTotal) * 100;
-        } else if (currentYearTotal > 0) {
-          yearlyGrowth = 100;
-        }
-    
-        const result = {
-          monthlyStats: currentYearStats[0]?.months || [],
-          yearlyGrowth: Number(yearlyGrowth.toFixed(2)),
-          year,
-        };
-    
-       
-        cache.set(cacheKey, result);
-    
-        return result;
+    // Calculate start of current week (Monday) in UTC
+    const startOfWeek = new Date(today);
+    const diffToMonday = dayOfWeek === 0 ? -6 : 1 - dayOfWeek;
+    startOfWeek.setDate(today.getDate() + diffToMonday);
+    startOfWeek.setHours(0, 0, 0, 0);
 
-  }
-   catch (error) {
+    // Calculate end of current week (Sunday) in UTC
+    const endOfWeek = new Date(startOfWeek);
+    endOfWeek.setDate(startOfWeek.getDate() + 6);
+    endOfWeek.setHours(23, 59, 59, 999);
+
+    const result = await cleanerdistributions.aggregate([
+      {
+        $match: {
+          userId: new mongoose.Types.ObjectId(userId),
+          isDelete: false,
+        },
+      },
+      {
+        $lookup: {
+          from: "services",
+          localField: "serviceId",
+          foreignField: "_id",
+          as: "service",
+        },
+      },
+      {
+        $unwind: "$service",
+      },
+      {
+        $match: {
+          "service.isDelete": false,
+          "service.isAccepted": true,
+          "service.isCompletePayment": true, // only count completed/fully paid jobs
+          "service.selectedDate": {
+            $gte: startOfWeek,
+            $lte: endOfWeek,
+          },
+        },
+      },
+      {
+        $project: {
+          dayOfWeek: { $dayOfWeek: "$service.selectedDate" }, // 1 (Sunday) to 7 (Saturday)
+          amount: "$service.cleanerPayout",
+        },
+      },
+      {
+        $group: {
+          _id: "$dayOfWeek",
+          totalAmount: { $sum: "$amount" },
+        },
+      },
+    ]);
+
+    const dayNames = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+    const dailyMap: Record<string, number> = {
+      "Mon": 0,
+      "Tue": 0,
+      "Wed": 0,
+      "Thu": 0,
+      "Fri": 0,
+      "Sat": 0,
+      "Sun": 0,
+    };
+
+    result.forEach((item) => {
+      const name = dayNames[item._id - 1];
+      if (dailyMap[name] !== undefined) {
+        dailyMap[name] = item.totalAmount;
+      }
+    });
+
+    const graphData = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"].map((day) => ({
+      day,
+      amount: dailyMap[day],
+    }));
+
+    return graphData;
+  } catch (error) {
     throw catchError(error);
   }
-
-}
+};
 
 const findMyAllRecentEarningIntoDb = async (
   query: Record<string, unknown>,
@@ -644,17 +632,18 @@ const findMyAllRecentEarningIntoDb = async (
               isAccepted: true,
               isDelete: false,
             },
-            select:
-              "  selectedDate isAccepted",
+            select: "selectedDate isAccepted totalAmount cleanerPayout cleaningType duration jobId isCompletePayment",
             populate: [
-             
+              {
+                path: "jobId",
+                select: "jobName photo",
+              },
               {
                 path: "payment",
                 match: {
                   payment_status: payment_status.paid,
                 },
-                select:
-                  "price  payment_status  createdAt",
+                select: "price payment_status createdAt",
               },
             ],
           },
@@ -682,9 +671,33 @@ const findMyAllRecentEarningIntoDb = async (
 
     const meta = await recentEarningQuery.countTotal();
 
+    const formattedData = data.map((item: any) => {
+      const service = item.serviceId;
+      const job = service.jobId || {};
+      const payment = service.payment || {};
+      
+      // Format the date to a nice string (e.g. October 24, 2026)
+      const formattedDate = service.selectedDate
+        ? new Date(service.selectedDate).toLocaleDateString('en-US', {
+            month: 'long',
+            day: 'numeric',
+            year: 'numeric',
+          })
+        : '';
+
+      return {
+        _id: item._id,
+        title: job.jobName || 'Cleaning Service',
+        photo: job.photo || '',
+        date: formattedDate,
+        amount: service.isCompletePayment ? (service.cleanerPayout || 0) : ((service.cleanerPayout || 0) / 2),
+        status: service.isCompletePayment ? 'COMPLETED' : 'ADVANCE_PAID',
+      };
+    });
+
     const response = {
       meta,
-      data,
+      data: formattedData,
     };
 
     cache.set(cacheKey, response);
@@ -711,7 +724,6 @@ const findMyEarningSummaryIntoDb = async (userId: string) => {
           isDelete: false,
         },
       },
-
       {
         $lookup: {
           from: "services",
@@ -727,68 +739,32 @@ const findMyEarningSummaryIntoDb = async (userId: string) => {
         $match: {
           "service.isDelete": false,
           "service.isAccepted": true,
-          
         },
       },
-      {
-        $lookup: {
-          from: "payments",
-          let: {
-            serviceId: "$service._id",
-          },
-          pipeline: [
-            {
-              $match: {
-                $expr: {
-                  $and: [
-                    {
-                      $eq: ["$serviceId", "$$serviceId"],
-                    },
-                    {
-                      $eq: [
-                        "$payment_status",
-                        payment_status.paid,
-                      ],
-                    },
-                    {
-                      $eq: ["$isDelete", false],
-                    },
-                  ],
-                },
-              },
-            },
-          ],
-          as: "payments",
-        },
-      },
-      {
-        $match: {
-          payments: {
-            $ne: [],
-          },
-        },
-      },
-
       {
         $group: {
           _id: null,
-
           totalCompletedJobs: {
-            $sum: 1,
+            $sum: {
+              $cond: [{ $eq: ["$service.isCompletePayment", true] }, 1, 0],
+            },
           },
-
           totalAmount: {
-            $sum: "$service.totalAmount",
+            $sum: {
+              $cond: [{ $eq: ["$service.isCompletePayment", true] }, "$service.cleanerPayout", 0],
+            },
           },
-
           totalAdvancePayment: {
             $sum: {
-              $arrayElemAt: ["$payments.price", 0],
+              $cond: [
+                { $eq: ["$service.isCompletePayment", false] },
+                { $divide: ["$service.cleanerPayout", 2] },
+                0,
+              ],
             },
           },
         },
       },
-
       {
         $project: {
           _id: 0,
@@ -799,10 +775,20 @@ const findMyEarningSummaryIntoDb = async (userId: string) => {
       },
     ]);
 
-    const response = result[0] || {
+    const user = await users.findById(userId, { fines: 1 });
+    const userFines = user?.fines || 0;
+
+    const summaryData = result[0] || {
       totalCompletedJobs: 0,
       totalAmount: 0,
       totalAdvancePayment: 0,
+    };
+
+    const response = {
+      totalCompletedJobs: summaryData.totalCompletedJobs,
+      totalAmount: summaryData.totalAmount - userFines,
+      totalAdvancePayment: summaryData.totalAdvancePayment,
+      totalFines: userFines,
     };
 
     cache.set(cacheKey, response);

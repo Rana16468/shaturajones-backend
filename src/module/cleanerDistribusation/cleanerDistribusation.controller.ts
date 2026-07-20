@@ -51,7 +51,7 @@ const findMyAcceptedJobList:RequestHandler=catchAsync(async(req , res)=>{
     });
 });
 const cleanerCompletedJobGraph:RequestHandler=catchAsync(async(req , res)=>{
-  const result=await cleanerDistributionService.cleanerCompletedJobGraphIntoDb(req.query);
+  const result=await cleanerDistributionService.cleanerCompletedJobGraphIntoDb(req.query, req.user.id);
   sendResponse(res, {
       statusCode: httpStatus.OK,
       success: true,
