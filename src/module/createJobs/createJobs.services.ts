@@ -35,17 +35,13 @@ const findByAllJobsIntoDb = async (
   query: Record<string, unknown>
 ) => {
   try {
+    cache.flushAll(); // Flush old cached jobs to ensure populated category names are returned
     const cacheKey = `jobs_${JSON.stringify(query)}`;
 
-    const cachedData = cache.get(cacheKey);
-    if (cachedData) {
-      return cachedData;
-    }
-
-    
     const jobsQuery = new QueryBuilder(
       createjobs
         .find({ isDelete: false })
+        .populate("category", "name photo")
         .lean(),
       query
     )
@@ -75,7 +71,7 @@ const findBySpecificJobsIntoDb=async(id: string)=>{
 
      try{
 
-        return await createjobs.findById(id);
+        return await createjobs.findById(id).populate("category", "name photo");
 
      }
       catch (error) {
