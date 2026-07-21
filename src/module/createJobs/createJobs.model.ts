@@ -58,7 +58,8 @@ const createJobsSchema = new Schema<TCreateJobs, CreateJobsModel>(
       default: JobType.CLEANING 
     },
     category: {
-      type: String,
+      type: Schema.Types.ObjectId,
+      ref: "Category",
       required: true,
     },
     cleaningType: {
