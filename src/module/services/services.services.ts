@@ -142,10 +142,22 @@ const createNewJobsServicesIntoDb = async (
      * Final Total & Payout Splits
      * ------------------------------------------
      */
-    const totalAmount =
+    let totalAmount =
       packageTotal +
       addOnsTotal +
       customPackageTotal;
+
+    if (!totalAmount || totalAmount <= 0) {
+      if ((payload as any).totalAmount && Number((payload as any).totalAmount) > 0) {
+        totalAmount = Number((payload as any).totalAmount);
+      } else if ((payload as any).price && Number((payload as any).price) > 0) {
+        totalAmount = Number((payload as any).price) * 2;
+      } else if (job.availablePackages && job.availablePackages.length > 0) {
+        totalAmount = Number(job.availablePackages[0].price || 130);
+      } else {
+        totalAmount = 150;
+      }
+    }
 
     // Calculate cleaner payout based on job type and duration
     const cleaningType = (job as any).cleaningType || "general";
