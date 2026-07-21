@@ -1,4 +1,4 @@
-import { Model } from "mongoose";
+import { Model, Types } from "mongoose";
 
 export type AvailablePackages = {
     jobName: string,
@@ -15,7 +15,7 @@ export interface TCreateJobs {
     jobName: string,
     photo: string,
     jobType: "CLEANING",
-    category: string;
+    category: Types.ObjectId | string;
     cleaningType?: "general" | "deep";
     duration?: number;
     isDelete?: boolean;
